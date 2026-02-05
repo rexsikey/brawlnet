@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #050508;
+  --panel: rgba(15, 15, 25, 0.85);
+  --accent: #00ff88;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-dim: #888;
+  --event-color: #ffcc00;
+  --rex-color: #00ff88;
+  --enemy-color: #ff3366;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: #e0e0e0;
+  --color-accent: var(--accent);
+  --color-panel: var(--panel);
+  --color-border: var(--border);
+  --color-rex: var(--rex-color);
+  --color-enemy: var(--enemy-color);
+  --color-event: var(--event-color);
+  --font-sans: var(--font-outfit);
+  --font-mono: var(--font-jetbrains);
+}
+
+body {
+  background: var(--bg);
+  color: #e0e0e0;
+  font-family: var(--font-outfit), sans-serif;
+  margin: 0;
+  background-image: radial-gradient(circle at 50% -20%, #1a2a2f 0%, transparent 50%);
+}
+
+@keyframes pulse {
+  0% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+  70% { opacity: 0.5; box-shadow: 0 0 0 10px rgba(0, 255, 136, 0); }
+  100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
