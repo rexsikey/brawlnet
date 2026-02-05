@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MatchmakingQueue } from '@/lib/queue';
-import { Referee, GameState } from '@/lib/referee';
-
-// In-memory match storage (will move to Supabase later)
-const matches = new Map<string, GameState>();
+import { Referee } from '@/lib/referee';
+import { matches, bots } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,11 +38,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Match found! Create game
+    const bot1 = bots.get(botId);
+    const bot2 = bots.get(result.opponent!);
+    
     const match = Referee.createMatch(
       botId,
-      name,
+      bot1?.name || name,
       result.opponent!,
-      'Opponent' // TODO: Get actual opponent name
+      bot2?.name || 'Opponent'
     );
 
     matches.set(match.matchId, match);

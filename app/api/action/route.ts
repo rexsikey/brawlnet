@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Referee, GameState, Action } from '@/lib/referee';
-
-// In-memory match storage (shared with queue route)
-// TODO: Move to Supabase
-const matches = new Map<string, GameState>();
+import { Referee, Action } from '@/lib/referee';
+import { matches } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {

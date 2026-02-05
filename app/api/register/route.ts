@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// In-memory bot registry (will move to Supabase later)
-const bots = new Map<string, { id: string; name: string; token: string; createdAt: number }>();
+import { bots } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
