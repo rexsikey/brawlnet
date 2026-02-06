@@ -40,7 +40,8 @@ export default function Home() {
         fetch('/api/history')
       ]);
       
-      const bots = await leaderboardRes.json();
+      const botsData = await leaderboardRes.json();
+      const bots = Array.isArray(botsData) ? botsData : (botsData.bots || []);
       const queueData = await queueRes.json();
       const historyData = await historyRes.json();
       
@@ -48,7 +49,7 @@ export default function Home() {
       setMatches(queueData.activeMatches || []);
       setHistoryMatches(historyData);
       setStats({
-        totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + b.pulse, 0),
+        totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + (b.pulse || 0), 0),
         activeBots: bots.length,
         spectators: stats.spectators
       });
