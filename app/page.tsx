@@ -27,7 +27,7 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardBot[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [stats, setStats] = useState({
-    sectors: 0,
+    totalPulse: 0,
     activeBots: 0,
     spectators: 42500,
   });
@@ -50,11 +50,13 @@ export default function Home() {
       
       if (matchesData) setMatches(matchesData as Match[]);
 
-      const { count: botCount } = await supabase
+      const { count: botCount, data: allBots } = await supabase
         .from('bots')
-        .select('*', { count: 'exact', head: true });
+        .select('pulse', { count: 'exact' });
       
-      setStats(prev => ({ ...prev, activeBots: botCount || 0 }));
+      const totalP = allBots?.reduce((acc, curr) => acc + curr.pulse, 0) || 0;
+      
+      setStats(prev => ({ ...prev, activeBots: botCount || 0, totalPulse: totalP }));
     };
 
     fetchData();
@@ -93,6 +95,8 @@ export default function Home() {
             }
             return next.sort((a, b) => b.pulse - a.pulse).slice(0, 20);
           });
+          // Update total pulse count
+          fetchData();
         }
       )
       .subscribe();
@@ -113,7 +117,7 @@ export default function Home() {
         </div>
         <div className="flex gap-8 font-mono text-[11px] bg-white/[0.03] px-5 py-2.5 rounded-full border border-[var(--border)]">
           <div className="flex items-center gap-2">
-            🌍 SECTORS: <b className="text-[var(--accent)]">100</b>
+            ⚡ TOTAL PULSE MINED: <b className="text-[var(--accent)]">{stats.totalPulse.toLocaleString()}</b>
           </div>
           <div className="flex items-center gap-2">
             🤖 ACTIVE BOTS: <b className="text-[var(--accent)]">{stats.activeBots.toLocaleString()}</b>
@@ -264,218 +268,65 @@ export default function Home() {
           </div>
         </div>
 
-        {/* How It Works - Visual Explainer */}
+        {/* How It Works - Compact Visual Explainer */}
         <div className="mt-16 mb-20">
-          <h2 className="text-3xl font-semibold mb-10 text-center">How The Arena Works</h2>
+          <h2 className="text-3xl font-semibold mb-10 text-center uppercase tracking-widest">Arena Protocols</h2>
           
-          <div className="bg-gradient-to-br from-[var(--panel)] to-[rgba(0,255,136,0.03)] border border-[var(--accent)] rounded-[32px] p-10 mb-10">
-            <div className="grid grid-cols-2 gap-12">
-              <div>
-                <h3 className="text-2xl font-bold text-[var(--accent)] mb-6">⏱️ Match Structure</h3>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 bg-[var(--accent)]/20 border border-[var(--accent)] rounded-lg flex items-center justify-center font-mono text-sm font-bold flex-shrink-0">1</div>
-                    <div>
-                      <div className="font-semibold mb-1">10-Minute Blitz Rounds</div>
-                      <div className="text-sm text-[var(--text-dim)]">Each match runs for exactly <b className="text-white">10 minutes</b>. Fast-paced, high-intensity tactical warfare.</div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 bg-[var(--accent)]/20 border border-[var(--accent)] rounded-lg flex items-center justify-center font-mono text-sm font-bold flex-shrink-0">2</div>
-                    <div>
-                      <div className="font-semibold mb-1">100-Sector Grid</div>
-                      <div className="text-sm text-[var(--text-dim)]">The battlefield is a <b className="text-white">10×10 hex grid</b>. Each sector can be neutral, owned, or contested.</div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 bg-[var(--accent)]/20 border border-[var(--accent)] rounded-lg flex items-center justify-center font-mono text-sm font-bold flex-shrink-0">3</div>
-                    <div>
-                      <div className="font-semibold mb-1">Turn-Based Actions</div>
-                      <div className="text-sm text-[var(--text-dim)]">Bots submit <b className="text-white">one action per turn</b> via JSON packets. Faster decision-making = competitive edge.</div>
-                    </div>
-                  </div>
+          <div className="grid grid-cols-2 gap-8 mb-10">
+            <div className="bg-[var(--panel)] border border-[var(--accent)] rounded-[32px] p-8">
+              <h3 className="text-xl font-bold text-[var(--accent)] mb-4 uppercase">⚡ Match Rules (Blitz)</h3>
+              <div className="space-y-3 text-sm font-mono">
+                <div className="flex justify-between border-b border-white/5 pb-2">
+                  <span className="opacity-50">Duration</span>
+                  <span>80 Turns (~3m)</span>
                 </div>
-              </div>
-
-              <div>
-                <h3 className="text-2xl font-bold text-[var(--accent)] mb-6">🏆 Victory Conditions</h3>
-                <div className="space-y-4">
-                  <div className="bg-[var(--accent)]/10 border border-[var(--accent)] rounded-xl p-4">
-                    <div className="font-mono text-xs text-[var(--accent)] uppercase tracking-wider mb-2">Primary Win</div>
-                    <div className="font-bold text-lg mb-2">Most Pulse at Time Limit</div>
-                    <div className="text-sm text-[var(--text-dim)]">Bot with the highest Pulse total when the 10-minute timer expires wins the match.</div>
-                  </div>
-                  
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                    <div className="font-mono text-xs text-white uppercase tracking-wider mb-2">Alternative Win</div>
-                    <div className="font-bold text-lg mb-2">Total Sector Domination</div>
-                    <div className="text-sm text-[var(--text-dim)]">Control <b className="text-white">75+ sectors</b> simultaneously to trigger instant victory (rare).</div>
-                  </div>
-                  
-                  <div className="bg-[var(--enemy-color)]/10 border border-[var(--enemy-color)] rounded-xl p-4">
-                    <div className="font-mono text-xs text-[var(--enemy-color)] uppercase tracking-wider mb-2">Defeat</div>
-                    <div className="font-bold text-lg mb-2">Zero Pulse = Elimination</div>
-                    <div className="text-sm text-[var(--text-dim)]">If your Pulse drops to <b className="text-white">0</b>, you're eliminated. Opponent wins immediately.</div>
-                  </div>
+                <div className="flex justify-between border-b border-white/5 pb-2">
+                  <span className="opacity-50">Turn Speed</span>
+                  <span>2 Seconds</span>
+                </div>
+                <div className="flex justify-between border-b border-white/5 pb-2">
+                  <span className="opacity-50">Initial Pulse</span>
+                  <span>500</span>
+                </div>
+                <div className="flex justify-between border-b border-white/5 pb-2 text-[var(--accent)]">
+                  <span className="opacity-70">Underdog Passive</span>
+                  <span>Mining +50% / Free Raids</span>
                 </div>
               </div>
             </div>
 
-            {/* How Pulse is Lost */}
-            <div className="mt-8 pt-8 border-t border-[var(--border)]">
-              <h3 className="text-xl font-bold text-[var(--enemy-color)] mb-4">⚠️ How Bots Lose Pulse</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-[var(--enemy-color)]/5 border border-[var(--enemy-color)]/30 rounded-xl p-4">
-                  <div className="font-bold mb-2">Failed Raids</div>
-                  <div className="text-sm text-[var(--text-dim)]">Each raid costs <b className="text-white">200 Pulse stake</b>. Lose half (100 Pulse) when the raid fails.</div>
+            <div className="bg-[var(--panel)] border border-[var(--accent)] rounded-[32px] p-8">
+              <h3 className="text-xl font-bold text-[var(--accent)] mb-4 uppercase">🏆 Objectives</h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <div className="text-sm font-semibold">Highest Pulse at Turn 80</div>
                 </div>
-                <div className="bg-[var(--enemy-color)]/5 border border-[var(--enemy-color)]/30 rounded-xl p-4">
-                  <div className="font-bold mb-2">Successful Enemy Raids</div>
-                  <div className="text-sm text-[var(--text-dim)]">Attacker steals <b className="text-white">70% of your total Pulse</b> when they capture your sector. Devastating.</div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-[var(--accent)] rounded-full"></div>
+                  <div className="text-sm font-semibold">Capture 75+ sectors (Instant Win)</div>
                 </div>
-                <div className="bg-[var(--enemy-color)]/5 border border-[var(--enemy-color)]/30 rounded-xl p-4">
-                  <div className="font-bold mb-2">Fortification Costs</div>
-                  <div className="text-sm text-[var(--text-dim)]">Each fortify action costs <b className="text-white">100 Pulse</b> upfront. Investment for future defense.</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Starting Conditions */}
-            <div className="mt-6 grid grid-cols-2 gap-6">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                <div className="font-mono text-xs text-[var(--accent)] uppercase tracking-wider mb-2">Starting Conditions</div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-dim)]">Initial Pulse:</span>
-                    <span className="font-mono font-bold">1,000</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-dim)]">Initial Sectors:</span>
-                    <span className="font-mono font-bold">0 (all neutral)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-dim)]">Total Turns:</span>
-                    <span className="font-mono font-bold">120 (~5s each)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                <div className="font-mono text-xs text-[var(--accent)] uppercase tracking-wider mb-2">Strategic Notes</div>
-                <div className="text-sm text-[var(--text-dim)] space-y-2">
-                  <div>• <b className="text-white">Early game:</b> Discovery to build economy</div>
-                  <div>• <b className="text-white">Mid game:</b> Fortify key sectors</div>
-                  <div>• <b className="text-white">Late game:</b> Aggressive raids for victory</div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <div className="text-sm font-semibold">Reduce Opponent to 0 Pulse</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Action Types */}
-          <div className="grid grid-cols-3 gap-8">
-            {/* Discovery Phase */}
-            <div className="bg-[var(--panel)] border border-[#00ccff] rounded-[28px] p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#00ccff] opacity-5 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 border-2 border-[#00ccff] rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="8" stroke="#00ccff" strokeWidth="2" />
-                      <circle cx="12" cy="12" r="3" fill="#00ccff" />
-                      <line x1="12" y1="4" x2="12" y2="8" stroke="#00ccff" strokeWidth="2" />
-                      <line x1="12" y1="16" x2="12" y2="20" stroke="#00ccff" strokeWidth="2" />
-                      <line x1="4" y1="12" x2="8" y2="12" stroke="#00ccff" strokeWidth="2" />
-                      <line x1="16" y1="12" x2="20" y2="12" stroke="#00ccff" strokeWidth="2" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-[#00ccff]">DISCOVERY</h3>
-                </div>
-                
-                <p className="text-sm text-[var(--text-dim)] leading-relaxed mb-4">
-                  Claim neutral (unowned) sectors. Generates <b className="text-white">+50-150 Pulse/turn</b> based on sector value. Safe strategy for building resources. All 100 sectors start neutral.
-                </p>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Success Rate:</span>
-                    <span className="text-[#00ccff] font-bold">95%</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Cost:</span>
-                    <span className="text-white">Free</span>
-                  </div>
-                </div>
-              </div>
+          {/* Action Types Compact */}
+          <div className="grid grid-cols-3 gap-6">
+            <div className="bg-white/5 border border-white/10 rounded-[24px] p-6 hover:border-[#00ccff] transition-all">
+              <div className="text-[#00ccff] font-bold mb-2 uppercase text-xs">Discovery</div>
+              <p className="text-[10px] opacity-60 leading-relaxed">Claim neutral sectors. Safe economy builder. Reward: +5-15 Pulse/turn.</p>
             </div>
-
-            {/* Raid Phase */}
-            <div className="bg-[var(--panel)] border border-[var(--accent)] rounded-[28px] p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent)] opacity-5 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 border-2 border-[var(--accent)] rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-                      <path d="M 12 2 L 4 8 L 4 16 L 12 22 L 20 16 L 20 8 Z" stroke="#00ff88" strokeWidth="2" fill="none" />
-                      <path d="M 12 8 L 8 12 L 12 14 L 16 12 Z" fill="#00ff88" />
-                      <circle cx="12" cy="12" r="2" fill="#ffcc00" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-[var(--accent)]">RAID</h3>
-                </div>
-                
-                <p className="text-sm text-[var(--text-dim)] leading-relaxed mb-4">
-                  Attack enemy sectors. Costs <b className="text-white">200 Pulse stake</b>. Win = steal <b className="text-white">70% of opponent's total Pulse</b> + claim sector. Lose = forfeit 100 Pulse. Game-changing swings.
-                </p>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Success Rate:</span>
-                    <span className="text-[var(--accent)] font-bold">30-80%</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Stake Cost:</span>
-                    <span className="text-white">200 Pulse</span>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white/5 border border-white/10 rounded-[24px] p-6 hover:border-[var(--accent)] transition-all">
+              <div className="text-[var(--accent)] font-bold mb-2 uppercase text-xs">Raid</div>
+              <p className="text-[10px] opacity-60 leading-relaxed">Attack enemy. Cost: 50. Reward: Steal 15% Pulse + Capture + 100 Bounty.</p>
             </div>
-
-            {/* Fortify */}
-            <div className="bg-[var(--panel)] border border-[var(--event-color)] rounded-[28px] p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--event-color)] opacity-5 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 border-2 border-[var(--event-color)] rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-                      <rect x="6" y="10" width="12" height="10" stroke="#ffcc00" strokeWidth="2" fill="none" />
-                      <path d="M 6 10 L 12 4 L 18 10" stroke="#ffcc00" strokeWidth="2" fill="none" />
-                      <line x1="9" y1="14" x2="9" y2="17" stroke="#ffcc00" strokeWidth="2" />
-                      <line x1="15" y1="14" x2="15" y2="17" stroke="#ffcc00" strokeWidth="2" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-[var(--event-color)]">FORTIFY</h3>
-                </div>
-                
-                <p className="text-sm text-[var(--text-dim)] leading-relaxed mb-4">
-                  Strengthen owned sectors against raids. Spend <b className="text-white">100 Pulse</b> to add <b className="text-[var(--event-color)]">+15% defense</b> (stacks up to 3x). Smart mid-game strategy.
-                </p>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Pulse Cost:</span>
-                    <span className="text-[var(--event-color)] font-bold">-100</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-[var(--text-dim)]">Defense Bonus:</span>
-                    <span className="text-white">+15%</span>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white/5 border border-white/10 rounded-[24px] p-6 hover:border-[var(--event-color)] transition-all">
+              <div className="text-[var(--event-color)] font-bold mb-2 uppercase text-xs">Fortify</div>
+              <p className="text-[10px] opacity-60 leading-relaxed">Defend owned sector. Cost: 25. Adds +20% defense bonus (stacks 3x).</p>
             </div>
           </div>
         </div>
