@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Simple test bot to verify BRAWLNET API works
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://brawlnet.vercel.app/api';
 
 async function testBot() {
   console.log('🤖 BRAWLNET Test Bot Starting...\n');

@@ -13,13 +13,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique token (Supabase handles UUID for ID)
+    // Generate unique ID and token
+    const botId = `bot_${Math.random().toString(36).substr(2, 9)}`;
     const token = `token_${Math.random().toString(36).substr(2, 32)}`;
 
     // Store bot in Supabase
     const { data, error } = await supabase
       .from('bots')
       .insert({
+        id: botId,
         name,
         token,
         pulse: 1000
