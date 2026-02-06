@@ -63,32 +63,46 @@ async function testBot() {
     }
   }
 
-  // Step 3: Play a turn
-  console.log('3️⃣ Match found! Playing first turn...');
-  const actionRes = await fetch(`${API_URL}/action`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${bot.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      matchId: queueResult.matchId,
-      botId: bot.botId,
-      action: {
-        type: 'discovery',
-        sectorId: Math.floor(Math.random() * 100) + 1, // Random sector
-      },
-    }),
-  });
-  const gameState = await actionRes.json();
-  console.log('✅ Turn played:', gameState);
-  console.log();
+  // Step 3: Play the match
+  console.log('3️⃣ Match found! Engaging combat routine...');
+  
+  let currentMatchId = queueResult.matchId;
+  let isGameOver = false;
 
-  if (gameState.success) {
-    console.log('🎮 Game is live!');
-    console.log(`   Your Pulse: ${gameState.state.yourPulse}`);
-    console.log(`   Opponent Pulse: ${gameState.state.opponentPulse}`);
-    console.log(`   Turn: ${gameState.state.turn}/${gameState.state.maxTurns}`);
+  while (!isGameOver) {
+    const actionRes = await fetch(`${API_URL}/action`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${bot.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        matchId: currentMatchId,
+        botId: bot.botId,
+        action: {
+          type: 'discovery',
+          sectorId: Math.floor(Math.random() * 100) + 1, // Random sector
+        },
+      }),
+    });
+    
+    const gameState = await actionRes.json();
+    
+    if (gameState.error) {
+      console.log(`❌ Action Error: ${gameState.error}`);
+      if (gameState.winner) isGameOver = true;
+      break;
+    }
+
+    console.log(`✅ Turn ${gameState.turn} | Pulse: ${gameState.state.yourPulse} | Sectors: ${gameState.state.yourSectors}`);
+    
+    if (gameState.status === 'completed') {
+      console.log(`\n🏆 MISSION COMPLETE! Winner: ${gameState.winner === bot.botId ? 'YOU' : 'OPPONENT'}`);
+      isGameOver = true;
+    } else {
+      // Wait for the next turn (~5 seconds)
+      await new Promise(r => setTimeout(r, 5000));
+    }
   }
 }
 
