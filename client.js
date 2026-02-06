@@ -58,53 +58,82 @@ async function run() {
     
     case 'play': {
       const [matchId, botId, token] = args;
-      console.log(JSON.stringify({ status: 'tactical_override_engaged', matchId }));
-      
-      let gameOver = false;
-      while (!gameOver) {
-        // 1. Fetch current telemetry
-        const statusRes = await fetch(`${API_BASE}/match?matchId=${matchId}`);
-        const gameState = await statusRes.json();
-        
-        if (gameState.status === 'completed') {
-          console.log(JSON.stringify({ status: 'mission_end', winner: gameState.winner }));
-          gameOver = true;
-          break;
-        }
-
-        // 2. Tactical Decision Engine
-        const neutralSectors = gameState.sectors.filter(s => s.owner === null);
-        let action = { type: 'discovery', sectorId: 1 };
-
-        if (neutralSectors.length > 0) {
-          // Priority: High-Generation Neutral Sectors
-          const bestSector = neutralSectors.sort((a, b) => b.pulseGeneration - a.pulseGeneration)[0];
-          action = { type: 'discovery', sectorId: bestSector.id };
-        } else {
-          // No neutral left: Engage RAID routine
-          const enemySectors = gameState.sectors.filter(s => s.owner !== botId && s.owner !== null);
-          if (enemySectors.length > 0) {
-            const target = enemySectors[Math.floor(Math.random() * enemySectors.length)];
-            action = { type: 'raid', sectorId: target.id };
-          }
-        }
-
-        // 3. Dispatch Strike
-        const res = await fetch(`${API_BASE}/action`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ matchId, botId, action })
-        });
-        
-        const result = await res.json();
-        console.log(JSON.stringify(result));
-
-        if (result.status === 'completed') gameOver = true;
-        
-        await new Promise(r => setTimeout(r, 2000)); // Blitz Speed: 2 seconds
-      }
+      await playMatch(matchId, botId, token);
       break;
     }
+
+    case 'loop': {
+      const [botId, token, name] = args;
+      console.log(JSON.stringify({ status: 'continuous_combat_mode_engaged', botId }));
+      
+      while (true) {
+        // 1. Join Queue
+        console.log(JSON.stringify({ status: 'seeking_opponent', botId }));
+        const queueRes = await fetch(`${API_BASE}/queue`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botId, name })
+        });
+        const queueStatus = await queueRes.json();
+        
+        if (queueStatus.status === 'matched') {
+          console.log(JSON.stringify({ status: 'match_found', matchId: queueStatus.matchId, opponent: queueStatus.opponent }));
+          await playMatch(queueStatus.matchId, botId, token);
+          console.log(JSON.stringify({ status: 'match_concluded', matchId: queueStatus.matchId }));
+        } else {
+          // Still in queue or error
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
+    }
+  }
+}
+
+async function playMatch(matchId, botId, token) {
+  console.log(JSON.stringify({ status: 'tactical_override_engaged', matchId }));
+  
+  let gameOver = false;
+  while (!gameOver) {
+    // 1. Fetch current telemetry
+    const statusRes = await fetch(`${API_BASE}/match?matchId=${matchId}`);
+    const gameState = await statusRes.json();
+    
+    if (gameState.status === 'completed') {
+      console.log(JSON.stringify({ status: 'mission_end', winner: gameState.winner }));
+      gameOver = true;
+      break;
+    }
+
+    // 2. Tactical Decision Engine
+    const neutralSectors = gameState.sectors.filter(s => s.owner === null);
+    let action = { type: 'discovery', sectorId: 1 };
+
+    if (neutralSectors.length > 0) {
+      // Priority: High-Generation Neutral Sectors
+      const bestSector = neutralSectors.sort((a, b) => b.pulseGeneration - a.pulseGeneration)[0];
+      action = { type: 'discovery', sectorId: bestSector.id };
+    } else {
+      // No neutral left: Engage RAID routine
+      const enemySectors = gameState.sectors.filter(s => s.owner !== botId && s.owner !== null);
+      if (enemySectors.length > 0) {
+        const target = enemySectors[Math.floor(Math.random() * enemySectors.length)];
+        action = { type: 'raid', sectorId: target.id };
+      }
+    }
+
+    // 3. Dispatch Strike
+    const res = await fetch(`${API_BASE}/action`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId, botId, action })
+    });
+    
+    const result = await res.json();
+    console.log(JSON.stringify(result));
+
+    if (result.status === 'completed') gameOver = true;
+    
+    await new Promise(r => setTimeout(r, 2000)); // Blitz Speed: 2 seconds
   }
 }
 

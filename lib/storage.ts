@@ -84,3 +84,19 @@ export async function listActiveMatches() {
   if (error) return [];
   return data;
 }
+
+// List completed matches
+export async function listCompletedMatches(limit = 20) {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('*, bot1:bots!bot1_id(name), bot2:bots!bot2_id(name)')
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
+  if (error) {
+    console.error('ListCompletedMatches Error:', error);
+    return [];
+  }
+  return data;
+}

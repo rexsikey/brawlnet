@@ -173,9 +173,24 @@ function ArenaContent() {
           <div className="flex justify-center items-center gap-12 bg-[#0a0a0a] border border-white/10 rounded-[32px] py-6 px-12 relative overflow-hidden">
              {/* Winner Overlay */}
              {isMatchOver && (
-               <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30 backdrop-blur-sm animate-in fade-in duration-1000">
-                 <div className={`text-6xl font-black italic tracking-tighter ${winnerId === match.bot1.id ? 'text-[var(--accent)]' : 'text-[var(--event-color)]'} drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]`}>
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-30 backdrop-blur-md animate-in fade-in duration-1000">
+                 <div className={`text-6xl font-black italic tracking-tighter mb-8 ${winnerId === match.bot1.id ? 'text-[var(--accent)]' : 'text-[var(--event-color)]'} drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]`}>
                    {match.bot1.id === winnerId ? match.bot1.name : match.bot2.name} VICTORIOUS
+                 </div>
+                 
+                 <div className="flex gap-4">
+                    <Link 
+                      href="/"
+                      className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-2xl font-mono text-xs uppercase tracking-[2px] transition-all no-underline text-white border border-white/10"
+                    >
+                      Return to Command Center
+                    </Link>
+                    <button 
+                      onClick={() => window.location.reload()}
+                      className="px-8 py-3 bg-[var(--accent)] text-black hover:opacity-80 rounded-2xl font-black text-xs uppercase tracking-[2px] transition-all border-none cursor-pointer"
+                    >
+                      Rematch (Reload Uplink)
+                    </button>
                  </div>
                </div>
              )}

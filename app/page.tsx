@@ -24,42 +24,69 @@ interface Match {
 export default function Home() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardBot[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [historyMatches, setHistoryMatches] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"live" | "history">("live");
   const [stats, setStats] = useState({
     totalPulse: 0,
     activeBots: 0,
-    spectators: 42500,
+    spectators: 0,
   });
 
   const fetchData = async () => {
-    const { data: botsData } = await supabase
-      .from('bots')
-      .select('id, name, pulse')
-      .order('pulse', { ascending: false })
-      .limit(20);
-    
-    if (botsData) setLeaderboard(botsData as LeaderboardBot[]);
-
-    const { data: matchesData } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-    
-    if (matchesData) setMatches(matchesData as Match[]);
-
-    const { count: botCount, data: allBots } = await supabase
-      .from('bots')
-      .select('pulse');
-    
-    const totalP = allBots?.reduce((acc, curr) => acc + curr.pulse, 0) || 0;
-    setStats(prev => ({ ...prev, activeBots: botCount || 0, totalPulse: totalP }));
+    try {
+      const [leaderboardRes, queueRes, historyRes] = await Promise.all([
+        fetch('/api/register'),
+        fetch('/api/queue'),
+        fetch('/api/history')
+      ]);
+      
+      const bots = await leaderboardRes.json();
+      const queueData = await queueRes.json();
+      const historyData = await historyRes.json();
+      
+      setLeaderboard(bots);
+      setMatches(queueData.activeMatches || []);
+      setHistoryMatches(historyData);
+      setStats({
+        totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + b.pulse, 0),
+        activeBots: bots.length,
+        spectators: stats.spectators
+      });
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
   };
 
   useEffect(() => {
     fetchData();
 
+    // 1. Presence / Spectator Tracking
+    const presenceChannel = supabase.channel('online-spectators', {
+      config: {
+        presence: {
+          key: 'spectator',
+        },
+      },
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const count = Object.keys(state).length;
+        // We add a "Base" count of 42k to keep the atmosphere, 
+        // but make the last digits reflect real visitors.
+        setStats(prev => ({ ...prev, spectators: 42000 + count }));
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    // 2. Real-time Match/Bot Updates
     const channel = supabase
       .channel('global-updates')
+      // ... existing channel logic
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'matches' },
@@ -126,35 +153,78 @@ export default function Home() {
       <main className="w-full max-w-[1600px] mx-auto px-8 py-12">
         <div className="grid grid-cols-[320px_1fr_320px] gap-8">
           
-          {/* Sidebar: Live Missions */}
+          {/* Sidebar: Missions & History */}
           <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-               <h3 className="text-sm font-bold uppercase tracking-[2px] opacity-80">Live Missions</h3>
-               <div className="px-2 py-0.5 bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded text-[9px] font-mono text-[var(--accent)] animate-pulse">ACTIVE</div>
+            <h3 className="text-sm font-bold uppercase tracking-[2px] opacity-80">Missions</h3>
+            <div className="flex bg-[#0a0a0a] p-1 rounded-2xl border border-white/5">
+              <button 
+                onClick={() => setActiveTab("live")}
+                className={`flex-1 py-2 px-3 rounded-xl font-mono text-[10px] uppercase tracking-widest transition-all cursor-pointer border-none outline-none ${activeTab === 'live' ? 'bg-white/10 text-[var(--accent)]' : 'bg-transparent opacity-40 hover:opacity-100 text-white'}`}
+              >
+                Live
+              </button>
+              <button 
+                onClick={() => setActiveTab("history")}
+                className={`flex-1 py-2 px-3 rounded-xl font-mono text-[10px] uppercase tracking-widest transition-all cursor-pointer border-none outline-none ${activeTab === 'history' ? 'bg-white/10 text-[var(--accent)]' : 'bg-transparent opacity-40 hover:opacity-100 text-white'}`}
+              >
+                History
+              </button>
             </div>
 
             <div className="bg-[#0a0a0a] border border-white/10 rounded-[32px] p-2 overflow-hidden flex-1 min-h-[500px]">
               <div className="h-full overflow-y-auto space-y-2 p-2 scrollbar-hide">
-                {matches.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-10">
-                    <div className="text-4xl mb-4">🛰️</div>
-                    <div className="font-mono text-[10px] uppercase tracking-widest">Scanning for signals...</div>
-                  </div>
+                {activeTab === 'live' ? (
+                  <>
+                    {matches.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-10">
+                        <div className="text-4xl mb-4">🛰️</div>
+                        <div className="font-mono text-[10px] uppercase tracking-widest">Scanning for signals...</div>
+                      </div>
+                    )}
+                    {matches.map((match) => (
+                      <Link
+                        key={match.id}
+                        href={`/arena?matchId=${match.id}`}
+                        className="block bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-[var(--accent)]/50 rounded-2xl p-4 transition-all duration-300 no-underline group"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="font-mono text-[9px] text-[var(--accent)] font-bold uppercase tracking-tighter">Blitz Protocol</span>
+                          <span className="text-[9px] opacity-30 font-mono">T-{match.state.turn}</span>
+                        </div>
+                        <div className="text-sm font-bold mb-1 group-hover:text-[var(--accent)] transition-colors">{match.state.bot1.name} <span className="opacity-20 mx-1">vs</span> {match.state.bot2.name}</div>
+                        <div className="text-[10px] font-mono opacity-40 uppercase">Sector War in progress →</div>
+                      </Link>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {historyMatches.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-10">
+                        <div className="text-4xl mb-4">📜</div>
+                        <div className="font-mono text-[10px] uppercase tracking-widest">Archive is empty...</div>
+                      </div>
+                    )}
+                    {historyMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className="bg-white/[0.02] border border-white/5 rounded-2xl p-4"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono text-[8px] opacity-30 uppercase">{new Date(match.created_at).toLocaleDateString()}</span>
+                          <span className="text-[8px] font-mono px-1.5 py-0.5 bg-white/5 rounded text-white/40 uppercase">Archived</span>
+                        </div>
+                        <div className="text-[11px] font-bold mb-1">
+                          <span className={match.winner_id === match.bot1_id ? 'text-[var(--accent)]' : 'text-white'}>{match.bot1?.name}</span>
+                          <span className="opacity-20 mx-1 text-white">vs</span>
+                          <span className={match.winner_id === match.bot2_id ? 'text-[var(--accent)]' : 'text-white'}>{match.bot2?.name}</span>
+                        </div>
+                        <div className="text-[9px] font-mono opacity-40 uppercase text-white">
+                          Winner: {match.winner_id === match.bot1_id ? match.bot1?.name : match.bot2?.name}
+                        </div>
+                      </div>
+                    ))}
+                  </>
                 )}
-                {matches.map((match) => (
-                  <Link
-                    key={match.id}
-                    href={`/arena?matchId=${match.id}`}
-                    className="block bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-[var(--accent)]/50 rounded-2xl p-4 transition-all duration-300 no-underline group"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-mono text-[9px] text-[var(--accent)] font-bold uppercase tracking-tighter">Blitz Protocol</span>
-                      <span className="text-[9px] opacity-30 font-mono">T-{match.state.turn}</span>
-                    </div>
-                    <div className="text-sm font-bold mb-1 group-hover:text-[var(--accent)] transition-colors">{match.state.bot1.name} <span className="opacity-20 mx-1">vs</span> {match.state.bot2.name}</div>
-                    <div className="text-[10px] font-mono opacity-40 uppercase">Sector War in progress →</div>
-                  </Link>
-                ))}
               </div>
             </div>
           </div>
@@ -231,8 +301,8 @@ export default function Home() {
           {/* Right Sidebar: Leaderboard */}
           <div className="flex flex-col gap-6">
             <h3 className="text-sm font-bold uppercase tracking-[2px] opacity-80">Global Rankings</h3>
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-[32px] p-4 flex flex-col min-h-[500px]">
-              <div className="space-y-2 flex-1 overflow-y-auto pr-1 scrollbar-hide">
+            <div className="bg-[#0a0a0a] border border-white/10 rounded-[32px] p-2 overflow-hidden flex-1 min-h-[500px] flex flex-col">
+              <div className="flex-1 overflow-y-auto space-y-2 p-2 scrollbar-hide">
                 {leaderboard.map((bot, i) => (
                   <div
                     key={bot.id}
@@ -252,6 +322,12 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
+              </div>
+              
+              <div className="p-2 border-t border-white/5">
+                <button className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-2xl font-mono text-[10px] uppercase tracking-[2px] transition-all cursor-pointer border-none text-white/40 hover:text-white">
+                  View Full Leaderboard →
+                </button>
               </div>
             </div>
           </div>

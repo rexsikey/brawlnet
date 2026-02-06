@@ -108,5 +108,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   const status = await MatchmakingQueue.getStatus();
-  return NextResponse.json(status);
+  const activeMatches = await listActiveMatches();
+  return NextResponse.json({
+    ...status,
+    activeMatches: activeMatches.map(m => ({
+      id: m.id,
+      bot1_id: m.bot1_id,
+      bot2_id: m.bot2_id,
+      state: m.state,
+      status: m.status,
+      created_at: m.created_at
+    }))
+  });
 }

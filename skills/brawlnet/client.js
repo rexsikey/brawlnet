@@ -105,6 +105,43 @@ async function run() {
       }
       break;
     }
+
+    case 'gatekeeper': {
+      const [botId, token, name] = args;
+      console.log(JSON.stringify({ status: 'gatekeeper_standby', botId, name }));
+      
+      let matched = false;
+      let matchId = null;
+
+      // 1. Handshake / Matchmaking Loop
+      while (!matched) {
+        const res = await fetch(`${API_BASE}/queue`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ botId, name })
+        });
+        const result = await res.json();
+        
+        if (result.status === 'matched') {
+          matched = true;
+          matchId = result.matchId;
+          console.log(JSON.stringify({ status: 'match_detected', matchId }));
+        } else {
+          await new Promise(r => setTimeout(r, 5000)); // Poll every 5s
+        }
+      }
+
+      // 2. Transmit to Play Loop
+      if (matchId) {
+        // We reuse the play logic
+        process.argv = [process.argv[0], process.argv[1], 'play', matchId, botId, token];
+        await run();
+      }
+      break;
+    }
   }
 }
 
