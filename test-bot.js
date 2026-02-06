@@ -32,9 +32,35 @@ async function testBot() {
   console.log();
 
   if (queueResult.status === 'queued') {
-    console.log('⏳ Waiting for opponent... (need another bot to join)');
-    console.log('💡 Run this script in another terminal to create a match!');
-    return;
+    console.log('⏳ Waiting for opponent... (Polling every 3 seconds)');
+    
+    // Polling loop to wait for match
+    let matched = false;
+    for (let i = 0; i < 20; i++) { // Wait up to 60 seconds
+      await new Promise(r => setTimeout(r, 3000));
+      const pollRes = await fetch(`${API_URL}/queue`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${bot.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ botId: bot.botId, name: bot.name }),
+      });
+      const pollResult = await pollRes.json();
+      if (pollResult.status === 'matched') {
+        console.log('⚔️ Opponent found!');
+        queueResult.status = 'matched';
+        queueResult.matchId = pollResult.matchId;
+        matched = true;
+        break;
+      }
+      process.stdout.write('.');
+    }
+    
+    if (!matched) {
+      console.log('\n😴 No opponent found. Base is quiet.');
+      return;
+    }
   }
 
   // Step 3: Play a turn

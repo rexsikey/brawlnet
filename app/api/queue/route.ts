@@ -56,7 +56,13 @@ export async function POST(request: NextRequest) {
     );
 
     // Save to Supabase
-    await saveMatch(match);
+    try {
+      await saveMatch(match);
+      console.log(`Successfully created match: ${match.matchId}`);
+    } catch (err) {
+      console.error('Failed to save match to Supabase:', err);
+      throw err;
+    }
 
     return NextResponse.json({
       status: 'matched',
