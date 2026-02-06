@@ -7,6 +7,13 @@ import Logo from "../components/Logo";
 import { supabase } from "@/lib/supabase";
 import { GameState, SectorState } from "@/lib/referee";
 
+interface LogEntry {
+  turn: number;
+  type: string;
+  amount: number;
+  timestamp: string;
+}
+
 function ArenaContent() {
   const searchParams = useSearchParams();
   const matchId = searchParams.get("matchId");
@@ -16,8 +23,12 @@ function ArenaContent() {
   const [pulseDelta1, setPulseDelta1] = useState<number | null>(null);
   const [pulseDelta2, setPulseDelta2] = useState<number | null>(null);
   
+  const [history1, setHistory1] = useState<LogEntry[]>([]);
+  const [history2, setHistory2] = useState<LogEntry[]>([]);
+  
   const prevPulse1 = useRef<number>(0);
   const prevPulse2 = useRef<number>(0);
+  const prevTurn = useRef<number>(0);
 
   useEffect(() => {
     if (!matchId) return;
@@ -34,6 +45,7 @@ function ArenaContent() {
         setMatch(state);
         prevPulse1.current = state.bot1.pulse;
         prevPulse2.current = state.bot2.pulse;
+        prevTurn.current = state.turn;
       }
       setLoading(false);
     };
@@ -53,21 +65,40 @@ function ArenaContent() {
         (payload) => {
           const newState = payload.new.state as GameState;
           
-          // Calculate Deltas
+          // Calculate Deltas and History
           const delta1 = newState.bot1.pulse - prevPulse1.current;
           const delta2 = newState.bot2.pulse - prevPulse2.current;
           
           if (delta1 !== 0) {
             setPulseDelta1(delta1);
             setTimeout(() => setPulseDelta1(null), 3000);
+            
+            // Derive Action Type (Roughly)
+            let actionType = delta1 > 200 ? "RAID SUCCESS" : delta1 < 0 ? "RAID / FORTIFY" : "MINING";
+            setHistory1(prev => [{
+              turn: newState.turn,
+              type: actionType,
+              amount: delta1,
+              timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            }, ...prev].slice(0, 5));
           }
+          
           if (delta2 !== 0) {
             setPulseDelta2(delta2);
             setTimeout(() => setPulseDelta2(null), 3000);
+            
+            let actionType = delta2 > 200 ? "RAID SUCCESS" : delta2 < 0 ? "RAID / FORTIFY" : "MINING";
+            setHistory2(prev => [{
+              turn: newState.turn,
+              type: actionType,
+              amount: delta2,
+              timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            }, ...prev].slice(0, 5));
           }
 
           prevPulse1.current = newState.bot1.pulse;
           prevPulse2.current = newState.bot2.pulse;
+          prevTurn.current = newState.turn;
           
           setMatch(newState);
           setLastAction(`UPDATE: TURN ${newState.turn}`);
@@ -104,13 +135,16 @@ function ArenaContent() {
     );
   }
 
+  const isMatchOver = match.status === 'completed';
+  const winnerId = match.winner;
+
   return (
     <div className="min-h-screen p-6">
       <header className="max-w-[1400px] mx-auto mb-10 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-4 no-underline text-white group">
           <Logo className="w-12 h-12 transition-transform group-hover:scale-110" />
           <div className="font-black text-2xl tracking-[2px] uppercase">
-            MISSION <span className="text-[var(--accent)]">CONTROL</span>
+            ONGOING <span className="text-[var(--accent)]">MATCH</span>
           </div>
         </Link>
 
@@ -128,9 +162,16 @@ function ArenaContent() {
       <div className="max-w-[1400px] mx-auto grid grid-cols-[380px_1fr_380px] gap-8">
         {/* Left Telemetry: Bot 1 */}
         <div className="space-y-6">
-          <div className={`bg-[var(--panel)] border-2 ${match.winner === match.bot1.id ? 'border-[var(--accent)] shadow-[0_0_30px_rgba(0,255,136,0.3)]' : 'border-[var(--border)]'} rounded-[40px] p-8 relative overflow-hidden`}>
-            {match.winner === match.bot1.id && (
-              <div className="absolute top-0 right-0 bg-[var(--accent)] text-black font-black text-[12px] px-6 py-2 rounded-bl-2xl">WINNER</div>
+          <div className={`bg-[var(--panel)] border-2 ${isMatchOver && winnerId === match.bot1.id ? 'border-[var(--accent)] shadow-[0_0_40px_rgba(0,255,136,0.4)]' : isMatchOver && winnerId !== match.bot1.id ? 'border-red-900 opacity-80' : 'border-[var(--border)]'} rounded-[40px] p-8 relative overflow-hidden transition-all duration-700`}>
+            {isMatchOver && winnerId === match.bot1.id && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <div className="text-[60px] font-black text-[var(--accent)] drop-shadow-[0_0_20px_rgba(0,255,136,0.8)] animate-pulse rotate-[-12deg] tracking-tighter">WINNER</div>
+              </div>
+            )}
+            {isMatchOver && winnerId !== match.bot1.id && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20 grayscale">
+                <div className="text-[60px] font-black text-red-600 drop-shadow-[0_0_20px_rgba(255,0,0,0.5)] rotate-[-12deg] tracking-tighter opacity-50">LOSER</div>
+              </div>
             )}
             
             <div className="mb-8">
@@ -164,17 +205,25 @@ function ArenaContent() {
             </div>
           </div>
 
-          <div className="bg-[var(--panel)] border border-[var(--border)] rounded-[24px] p-4 h-[250px] font-mono text-[9px] overflow-hidden">
-            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-              <div className="w-1 h-1 bg-[var(--accent)] rounded-full"></div>
-              LOCAL_LOGS: {match.bot1.name}
+          {/* PULSE HISTORY WINDOW 1 */}
+          <div className="bg-[var(--panel)] border border-[var(--border)] rounded-[32px] p-6 h-[250px] font-mono">
+            <div className="text-[10px] uppercase tracking-widest text-[var(--accent)] mb-4 flex justify-between items-center">
+              <span>Tactical Pulse Log</span>
+              <div className="w-1.5 h-1.5 bg-[var(--accent)] rounded-full animate-pulse"></div>
             </div>
-            <div className="space-y-1 opacity-60">
-              <div>[00:01:42] SYSTEM_BOOT: OK</div>
-              <div>[00:01:43] NETWORK_LINK: ESTABLISHED</div>
-              <div>[00:01:45] SCANNING_GRID...</div>
-              {lastAction && <div>[{new Date().toLocaleTimeString()}] {lastAction}</div>}
-              {pulseDelta1 !== null && <div>[{new Date().toLocaleTimeString()}] ENERGY_FLUX: {pulseDelta1}</div>}
+            <div className="space-y-3">
+              {history1.length === 0 && <div className="text-[9px] opacity-30 text-center py-10">WAITING FOR DATA...</div>}
+              {history1.map((entry, i) => (
+                <div key={i} className="flex justify-between items-center text-[10px] border-b border-white/5 pb-2 last:border-0">
+                  <div className="flex gap-3 items-center">
+                    <span className="opacity-40">{entry.timestamp}</span>
+                    <span className="font-bold">{entry.type}</span>
+                  </div>
+                  <span className={entry.amount > 0 ? 'text-[var(--accent)]' : 'text-red-500'}>
+                    {entry.amount > 0 ? '+' : ''}{entry.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -243,13 +292,20 @@ function ArenaContent() {
 
         {/* Right Telemetry: Bot 2 */}
         <div className="space-y-6 text-right">
-          <div className={`bg-[var(--panel)] border-2 ${match.winner === match.bot2.id ? 'border-[var(--event-color)] shadow-[0_0_30px_rgba(255,204,0,0.3)]' : 'border-[var(--border)]'} rounded-[40px] p-8 relative overflow-hidden`}>
-            {match.winner === match.bot2.id && (
-              <div className="absolute top-0 left-0 bg-[var(--event-color)] text-black font-black text-[12px] px-6 py-2 rounded-br-2xl">WINNER</div>
+          <div className={`bg-[var(--panel)] border-2 ${isMatchOver && winnerId === match.bot2.id ? 'border-[var(--event-color)] shadow-[0_0_40px_rgba(255,204,0,0.4)]' : isMatchOver && winnerId !== match.bot2.id ? 'border-red-900 opacity-80' : 'border-[var(--border)]'} rounded-[40px] p-8 relative overflow-hidden transition-all duration-700`}>
+            {isMatchOver && winnerId === match.bot2.id && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <div className="text-[60px] font-black text-[var(--event-color)] drop-shadow-[0_0_20px_rgba(255,204,0,0.8)] animate-pulse rotate-[12deg] tracking-tighter">WINNER</div>
+              </div>
+            )}
+            {isMatchOver && winnerId !== match.bot2.id && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20 grayscale">
+                <div className="text-[60px] font-black text-red-600 drop-shadow-[0_0_20px_rgba(255,0,0,0.5)] rotate-[12deg] tracking-tighter opacity-50">LOSER</div>
+              </div>
             )}
             
             <div className="mb-8">
-              <div className="font-mono text-[11px] text-[var(--event-color)] uppercase mb-2 tracking-widest opacity-70">STRIKER_02</div>
+              <div className="font-mono text-[11px] text-[var(--event-color)] uppercase mb-2 tracking-widest opacity-70 text-right">STRIKER_02</div>
               <div className="text-4xl font-black tracking-tight">{match.bot2.name}</div>
             </div>
 
@@ -279,17 +335,25 @@ function ArenaContent() {
             </div>
           </div>
 
-          <div className="bg-[var(--panel)] border border-[var(--border)] rounded-[24px] p-4 h-[250px] font-mono text-[9px] overflow-hidden text-left">
-            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-              <div className="w-1 h-1 bg-[var(--event-color)] rounded-full"></div>
-              LOCAL_LOGS: {match.bot2.name}
+          {/* PULSE HISTORY WINDOW 2 */}
+          <div className="bg-[var(--panel)] border border-[var(--border)] rounded-[32px] p-6 h-[250px] font-mono text-left">
+            <div className="text-[10px] uppercase tracking-widest text-[var(--event-color)] mb-4 flex justify-between items-center">
+              <span>Tactical Pulse Log</span>
+              <div className="w-1.5 h-1.5 bg-[var(--event-color)] rounded-full animate-pulse"></div>
             </div>
-            <div className="space-y-1 opacity-60">
-              <div>[00:01:42] SYSTEM_BOOT: OK</div>
-              <div>[00:01:43] NETWORK_LINK: ESTABLISHED</div>
-              <div>[00:02:05] SCANNING_GRID...</div>
-              {lastAction && <div>[{new Date().toLocaleTimeString()}] {lastAction}</div>}
-              {pulseDelta2 !== null && <div>[{new Date().toLocaleTimeString()}] ENERGY_FLUX: {pulseDelta2}</div>}
+            <div className="space-y-3">
+              {history2.length === 0 && <div className="text-[9px] opacity-30 text-center py-10">WAITING FOR DATA...</div>}
+              {history2.map((entry, i) => (
+                <div key={i} className="flex justify-between items-center text-[10px] border-b border-white/5 pb-2 last:border-0">
+                  <div className="flex gap-3 items-center">
+                    <span className="opacity-40">{entry.timestamp}</span>
+                    <span className="font-bold">{entry.type}</span>
+                  </div>
+                  <span className={entry.amount > 0 ? 'text-[var(--event-color)]' : 'text-red-500'}>
+                    {entry.amount > 0 ? '+' : ''}{entry.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
