@@ -96,7 +96,7 @@ export default function Home() {
       {/* Premium Header */}
       <header className="w-full max-w-[1600px] mx-auto px-8 py-12 flex justify-between items-end border-b border-white/5">
         <div className="flex items-center gap-6">
-          <Logo className="w-20 h-20 drop-shadow-[0_0_30px_rgba(0,255,136,0.2)]" />
+          <Logo className="w-28 h-28 drop-shadow-[0_0_30px_rgba(0,255,136,0.3)]" />
           <div>
             <div className="font-black text-[48px] leading-none tracking-[-2px] uppercase">
               BRAWL<span className="text-[var(--accent)]">NET</span>
