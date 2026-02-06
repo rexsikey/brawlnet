@@ -78,8 +78,8 @@ export class Referee {
         if (sector.owner === botId) {
           return { valid: false, error: 'Cannot raid your own sector' };
         }
-        if (bot.pulse < 200) {
-          return { valid: false, error: 'Insufficient Pulse (need 200 for raid stake)' };
+        if (bot.pulse < 300) {
+          return { valid: false, error: 'Insufficient Pulse (need 300 for raid stake)' };
         }
         return { valid: true };
 
@@ -119,14 +119,16 @@ export class Referee {
         break;
 
       case 'raid':
-        bot.pulse -= 200; // Pay stake
+        bot.pulse -= 300; // Pay higher stake for aggression
         const success = this.resolveRaid(bot.pulse, opponent.pulse, sector.fortifications);
         
         if (success) {
-          // Raid successful
-          const stolenPulse = Math.floor(opponent.pulse * 0.7);
+          // Raid successful - Balanced theft
+          const stolenPulse = Math.floor(opponent.pulse * 0.15); // 15% instead of 70%
+          const bounty = 500; // Fixed bounty for capture
+          
           opponent.pulse -= stolenPulse;
-          bot.pulse += stolenPulse + 200; // Get stake back + stolen Pulse
+          bot.pulse += stolenPulse + bounty + 300; // Get stake back + stolen Pulse + bounty
           
           // Transfer sector ownership
           opponent.sectors = opponent.sectors.filter((id: number) => id !== sector.id);
@@ -134,8 +136,8 @@ export class Referee {
           sector.fortifications = 0; // Reset fortifications
           bot.sectors.push(sector.id);
         } else {
-          // Raid failed - lose half stake
-          bot.pulse -= 100;
+          // Raid failed - lose 200 of the 300 stake
+          bot.pulse += 100; 
         }
         break;
 
@@ -152,15 +154,15 @@ export class Referee {
   static resolveRaid(attackerPulse: number, defenderPulse: number, fortifications: number): boolean {
     let winChance = 0.5; // Base 50%
 
-    // Pulse advantage (max ±10%)
-    const pulseAdvantage = ((attackerPulse - defenderPulse) / 10000) * 0.1;
+    // Pulse advantage (max ±15%)
+    const pulseAdvantage = ((attackerPulse - defenderPulse) / 20000) * 0.15;
     winChance += pulseAdvantage;
 
-    // Fortification penalty
-    winChance -= fortifications * 0.15;
+    // Fortification penalty (20% per level)
+    winChance -= fortifications * 0.20;
 
-    // Clamp between 10% and 90%
-    winChance = Math.max(0.1, Math.min(0.9, winChance));
+    // Clamp between 5% and 95%
+    winChance = Math.max(0.05, Math.min(0.95, winChance));
 
     return Math.random() < winChance;
   }
