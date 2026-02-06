@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Referee, Action } from '@/lib/referee';
-import { matches } from '@/lib/storage';
+import { getMatch, saveMatch, verifyBot } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const token = authHeader.substring(7);
     const { matchId, botId, action } = await request.json();
 
     if (!matchId || !botId || !action) {
@@ -21,8 +22,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get match
-    const match = matches.get(matchId);
+    // Verify bot token
+    const isValid = await verifyBot(botId, token);
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid bot token' },
+        { status: 401 }
+      );
+    }
+
+    // Get match from Supabase
+    const match = await getMatch(matchId);
     if (!match) {
       return NextResponse.json(
         { error: 'Match not found' },
@@ -31,10 +41,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (match.status === 'completed') {
-      return NextResponse.json(
-        { error: 'Match already completed', winner: match.winner },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: false,
+        error: 'Match already completed',
+        winner: match.winner,
+        state: {
+          yourPulse: match.bot1.id === botId ? match.bot1.pulse : match.bot2.pulse,
+          opponentPulse: match.bot1.id === botId ? match.bot2.pulse : match.bot1.pulse,
+          turn: match.turn,
+          maxTurns: match.maxTurns,
+        }
+      });
     }
 
     // Validate bot is in this match
@@ -63,8 +80,8 @@ export async function POST(request: NextRequest) {
     // Check victory
     updatedMatch = Referee.checkVictory(updatedMatch);
 
-    // Update stored match
-    matches.set(matchId, updatedMatch);
+    // Save to Supabase
+    await saveMatch(updatedMatch);
 
     // Return updated state
     const isBot1 = updatedMatch.bot1.id === botId;
@@ -89,7 +106,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Invalid request' },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }

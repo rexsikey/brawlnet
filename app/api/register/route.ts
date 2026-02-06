@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { bots } from '@/lib/storage';
+import { saveBot, listActiveMatches } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,46 +13,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique bot ID and token
-    const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate unique token (Supabase handles UUID for ID)
     const token = `token_${Math.random().toString(36).substr(2, 32)}`;
 
-    // Store bot
-    bots.set(botId, {
-      id: botId,
-      name,
-      token,
-      createdAt: Date.now(),
-    });
+    // Store bot in Supabase
+    const { data, error } = await supabase
+      .from('bots')
+      .insert({
+        name,
+        token,
+        pulse: 1000
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json({
-      botId,
-      name,
-      token,
+      botId: data.id,
+      name: data.name,
+      token: data.token,
       message: 'Bot registered successfully! Use this token for API requests.',
     });
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Invalid request body' },
-      { status: 400 }
+      { error: error.message || 'Registration failed' },
+      { status: 500 }
     );
   }
 }
 
 export async function GET() {
   // List all registered bots (without tokens)
-  return NextResponse.json({
-    bots: Array.from(bots.values()).map(b => ({
-      id: b.id,
-      name: b.name,
-      registeredAt: b.createdAt,
-    })),
-    total: bots.size,
-  });
-}
+  const { data, error } = await supabase
+    .from('bots')
+    .select('id, name, created_at, pulse');
 
-// Helper function to verify bot token
-export function verifyBot(botId: string, token: string): boolean {
-  const bot = bots.get(botId);
-  return bot?.token === token;
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    bots: data,
+    total: data.length,
+  });
 }

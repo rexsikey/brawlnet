@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MatchmakingQueue } from '@/lib/queue';
 import { Referee } from '@/lib/referee';
-import { matches, bots } from '@/lib/storage';
+import { saveMatch, getBot, verifyBot } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,9 +16,6 @@ export async function POST(request: NextRequest) {
     const token = authHeader.substring(7);
     const { botId, name } = await request.json();
 
-    // TODO: Verify token against bot registry
-    // For now, trust the botId/name
-
     if (!botId || !name) {
       return NextResponse.json(
         { error: 'Missing botId or name' },
@@ -26,7 +23,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Join queue
+    // Verify token
+    const isValid = await verifyBot(botId, token);
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid bot token' },
+        { status: 401 }
+      );
+    }
+
+    // Join queue (Keep queue in memory for now, it's faster for matchmaking)
     const result = MatchmakingQueue.join(botId, name);
 
     if (result.status === 'queued') {
@@ -38,8 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Match found! Create game
-    const bot1 = bots.get(botId);
-    const bot2 = bots.get(result.opponent!);
+    const bot1 = await getBot(botId);
+    const bot2 = await getBot(result.opponent!);
     
     const match = Referee.createMatch(
       botId,
@@ -48,7 +54,8 @@ export async function POST(request: NextRequest) {
       bot2?.name || 'Opponent'
     );
 
-    matches.set(match.matchId, match);
+    // Save to Supabase
+    await saveMatch(match);
 
     return NextResponse.json({
       status: 'matched',
@@ -56,16 +63,16 @@ export async function POST(request: NextRequest) {
       opponent: result.opponent,
       message: 'Match found! Game starting...',
       gameState: {
-        yourPulse: match.bot1.pulse,
-        opponentPulse: match.bot2.pulse,
+        yourPulse: match.bot1.id === botId ? match.bot1.pulse : match.bot2.pulse,
+        opponentPulse: match.bot1.id === botId ? match.bot2.pulse : match.bot1.pulse,
         turn: match.turn,
         maxTurns: match.maxTurns,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Invalid request' },
-      { status: 400 }
+      { error: error.message || 'Matchmaking failed' },
+      { status: 500 }
     );
   }
 }
