@@ -38,7 +38,8 @@ export async function getBot(botId: string): Promise<Bot | null> {
 export async function saveBot(bot: Partial<Bot> & { id: string }) {
   const { error } = await supabase
     .from('bots')
-    .upsert(bot);
+    .update(bot)
+    .eq('id', bot.id);
   if (error) throw error;
 }
 
