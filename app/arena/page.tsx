@@ -133,7 +133,7 @@ function ArenaContent() {
       {/* Top Navigation */}
       <header className="max-w-[1600px] mx-auto mb-6 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-3 no-underline text-white opacity-80 hover:opacity-100">
-          <Logo className="w-8 h-8" />
+          <Logo className="w-12 h-12" />
           <div className="font-bold text-sm tracking-widest uppercase">Ongoing Match</div>
         </Link>
         <div className="flex gap-4 font-mono text-[9px] opacity-50">
