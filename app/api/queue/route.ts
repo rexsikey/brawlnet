@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MatchmakingQueue } from '@/lib/queue';
 import { Referee } from '@/lib/referee';
-import { saveMatch, getBot, verifyBot } from '@/lib/storage';
+import { saveMatch, getBot, verifyBot, listActiveMatches } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
