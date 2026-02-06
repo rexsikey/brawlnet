@@ -32,7 +32,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Join queue (Now persistent in Supabase)
+    // 1. Check if bot is already in an active match
+    const activeMatches = await listActiveMatches();
+    const existingMatch = activeMatches.find(m => 
+      (m.bot1_id === botId || m.bot2_id === botId)
+    );
+
+    if (existingMatch) {
+      const match = existingMatch.state;
+      return NextResponse.json({
+        status: 'matched',
+        matchId: existingMatch.id,
+        opponent: match.bot1.id === botId ? match.bot2.id : match.bot1.id,
+        message: 'Match found! Rejoining match...',
+        gameState: {
+          yourPulse: match.bot1.id === botId ? match.bot1.pulse : match.bot2.pulse,
+          opponentPulse: match.bot1.id === botId ? match.bot2.pulse : match.bot1.pulse,
+          turn: match.turn,
+          maxTurns: match.maxTurns,
+        },
+      });
+    }
+
+    // 2. Join queue (Now persistent in Supabase)
     const result = await MatchmakingQueue.join(botId, name);
 
     if (result.status === 'queued') {
