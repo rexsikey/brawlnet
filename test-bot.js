@@ -100,8 +100,8 @@ async function testBot() {
       console.log(`\n🏆 MISSION COMPLETE! Winner: ${gameState.winner === bot.botId ? 'YOU' : 'OPPONENT'}`);
       isGameOver = true;
     } else {
-      // Wait for the next turn (~5 seconds)
-      await new Promise(r => setTimeout(r, 5000));
+      // Wait for the next turn (~2 seconds - Blitz Mode)
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
 }

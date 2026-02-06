@@ -1,5 +1,5 @@
-// BRAWLNET Referee Engine v1.0
-// Pure deterministic logic - NO LLM calls
+// BRAWLNET Referee Engine v1.2 (BLITZ EDITION)
+// Deterministic tactical logic with comeback mechanics
 
 export interface GameState {
   matchId: string;
@@ -17,14 +17,14 @@ export interface BotState {
   id: string;
   name: string;
   pulse: number;
-  sectors: number[]; // Array of sector IDs owned
+  sectors: number[]; 
 }
 
 export interface SectorState {
   id: number; // 1-100
-  owner: string | null; // botId or null
+  owner: string | null;
   fortifications: number; // 0-3
-  pulseGeneration: number; // 50-150 per turn
+  pulseGeneration: number; // 5-15 per turn (Scaled down)
 }
 
 export interface Action {
@@ -33,84 +33,71 @@ export interface Action {
 }
 
 export class Referee {
-  // Initialize a new match
   static createMatch(bot1Id: string, bot1Name: string, bot2Id: string, bot2Name: string): GameState {
-    // Create 100 neutral sectors with random Pulse generation rates
     const sectors: SectorState[] = Array.from({ length: 100 }, (_, i) => ({
       id: i + 1,
       owner: null,
       fortifications: 0,
-      pulseGeneration: Math.floor(Math.random() * 101) + 50, // 50-150
+      pulseGeneration: Math.floor(Math.random() * 11) + 5, // 5-15
     }));
 
     return {
       matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      bot1: { id: bot1Id, name: bot1Name, pulse: 1000, sectors: [] },
-      bot2: { id: bot2Id, name: bot2Name, pulse: 1000, sectors: [] },
+      bot1: { id: bot1Id, name: bot1Name, pulse: 500, sectors: [] }, // Starting pulse 500
+      bot2: { id: bot2Id, name: bot2Name, pulse: 500, sectors: [] },
       sectors,
       turn: 1,
-      maxTurns: 120,
+      maxTurns: 80, // Shorter games
       status: 'active',
       startTime: Date.now(),
     };
   }
 
-  // Validate action
   static validateAction(state: GameState, botId: string, action: Action): { valid: boolean; error?: string } {
     const bot = state.bot1.id === botId ? state.bot1 : state.bot2;
     const sector = state.sectors.find(s => s.id === action.sectorId);
 
-    if (!sector) {
+    if (!sector && action.sectorId !== -1) {
       return { valid: false, error: 'Invalid sector ID' };
     }
 
+    // Economy checks for Blitz scale
+    const RAID_COST = bot.sectors.length < 40 ? 0 : 50; // Underdog passive: Free raids
+    const FORTIFY_COST = 25;
+
     switch (action.type) {
       case 'discovery':
-        if (sector.owner !== null) {
-          return { valid: false, error: 'Sector is already owned' };
-        }
+        if (!sector || sector.owner !== null) return { valid: false, error: 'Sector is already owned' };
         return { valid: true };
 
       case 'raid':
-        if (sector.owner === null) {
-          return { valid: false, error: 'Cannot raid neutral sector (use discovery)' };
-        }
-        if (sector.owner === botId) {
-          return { valid: false, error: 'Cannot raid your own sector' };
-        }
-        if (bot.pulse < 300) {
-          return { valid: false, error: 'Insufficient Pulse (need 300 for raid stake)' };
-        }
+        if (!sector || sector.owner === null) return { valid: false, error: 'Cannot raid neutral' };
+        if (sector.owner === botId) return { valid: false, error: 'Cannot raid self' };
+        if (bot.pulse < RAID_COST) return { valid: false, error: `Need ${RAID_COST} Pulse for raid` };
         return { valid: true };
 
       case 'fortify':
-        if (sector.owner !== botId) {
-          return { valid: false, error: 'Can only fortify your own sectors' };
-        }
-        if (bot.pulse < 100) {
-          return { valid: false, error: 'Insufficient Pulse (need 100 for fortify)' };
-        }
-        if (sector.fortifications >= 3) {
-          return { valid: false, error: 'Sector already max fortified (3x)' };
-        }
+        if (!sector || sector.owner !== botId) return { valid: false, error: 'Not your sector' };
+        if (bot.pulse < FORTIFY_COST) return { valid: false, error: `Need ${FORTIFY_COST} Pulse for fortify` };
+        if (sector.fortifications >= 3) return { valid: false, error: 'Max fortified' };
         return { valid: true };
 
       default:
-        return { valid: false, error: 'Unknown action type' };
+        return { valid: false, error: 'Unknown action' };
     }
   }
 
-  // Execute action and update state
   static executeAction(state: GameState, botId: string, action: Action): GameState {
     const validation = this.validateAction(state, botId, action);
-    if (!validation.valid) {
-      throw new Error(validation.error);
-    }
+    if (!validation.valid) throw new Error(validation.error);
 
-    const newState = JSON.parse(JSON.stringify(state)); // Deep clone
+    const newState = JSON.parse(JSON.stringify(state));
     const bot = newState.bot1.id === botId ? newState.bot1 : newState.bot2;
     const opponent = newState.bot1.id === botId ? newState.bot2 : newState.bot1;
     const sector = newState.sectors.find((s: SectorState) => s.id === action.sectorId)!;
+
+    const RAID_COST = bot.sectors.length < 40 ? 0 : 50;
+    const FORTIFY_COST = 25;
 
     switch (action.type) {
       case 'discovery':
@@ -119,30 +106,38 @@ export class Referee {
         break;
 
       case 'raid':
-        bot.pulse -= 300; // Pay higher stake for aggression
+        bot.pulse -= RAID_COST;
         const success = this.resolveRaid(bot.pulse, opponent.pulse, sector.fortifications);
         
         if (success) {
-          // Raid successful - Balanced theft
-          const stolenPulse = Math.floor(opponent.pulse * 0.15); // 15% instead of 70%
-          const bounty = 500; // Fixed bounty for capture
+          // Comeback Mechanic: Last Stand
+          const pulseDiff = opponent.pulse - bot.pulse;
+          const isUnderdog = pulseDiff > 1000 && newState.turn > 40;
           
+          const theftMultiplier = isUnderdog ? 0.30 : 0.15; // 30% theft if losing badly
+          const stolenPulse = Math.floor(opponent.pulse * theftMultiplier);
+          const bounty = isUnderdog ? 300 : 100;
+
           opponent.pulse -= stolenPulse;
-          bot.pulse += stolenPulse + bounty + 300; // Get stake back + stolen Pulse + bounty
+          bot.pulse += (stolenPulse + bounty + RAID_COST);
           
-          // Transfer sector ownership
+          // Transfer ownership
           opponent.sectors = opponent.sectors.filter((id: number) => id !== sector.id);
           sector.owner = botId;
-          sector.fortifications = 0; // Reset fortifications
+          sector.fortifications = 0;
           bot.sectors.push(sector.id);
+
+          // Last Stand: Cluster Capture (3 random neighbors)
+          if (isUnderdog) {
+            this.captureNeighbors(newState, botId, sector.id);
+          }
         } else {
-          // Raid failed - lose 200 of the 300 stake
-          bot.pulse += 100; 
+          bot.pulse -= 20; // Failed raid penalty
         }
         break;
 
       case 'fortify':
-        bot.pulse -= 100;
+        bot.pulse -= FORTIFY_COST;
         sector.fortifications += 1;
         break;
     }
@@ -150,76 +145,60 @@ export class Referee {
     return newState;
   }
 
-  // Combat resolution
-  static resolveRaid(attackerPulse: number, defenderPulse: number, fortifications: number): boolean {
-    let winChance = 0.5; // Base 50%
-
-    // Pulse advantage (max ±15%)
-    const pulseAdvantage = ((attackerPulse - defenderPulse) / 20000) * 0.15;
-    winChance += pulseAdvantage;
-
-    // Fortification penalty (20% per level)
-    winChance -= fortifications * 0.20;
-
-    // Clamp between 5% and 95%
-    winChance = Math.max(0.05, Math.min(0.95, winChance));
-
-    return Math.random() < winChance;
+  private static captureNeighbors(state: any, botId: string, sectorId: number) {
+    // Simple neighbor logic for 10x10 grid
+    const neighbors = [sectorId - 1, sectorId + 1, sectorId - 10, sectorId + 10];
+    let captured = 0;
+    for (const nId of neighbors) {
+      if (captured >= 3) break;
+      const n = state.sectors.find((s: any) => s.id === nId);
+      if (n && n.owner !== botId) {
+        // If it was opponent's, remove it from them
+        if (n.owner) {
+          const opp = state.bot1.id === n.owner ? state.bot1 : state.bot2;
+          opp.sectors = opp.sectors.filter((id: number) => id !== n.id);
+        }
+        n.owner = botId;
+        const bot = state.bot1.id === botId ? state.bot1 : state.bot2;
+        bot.sectors.push(n.id);
+        captured++;
+      }
+    }
   }
 
-  // Process turn (apply Pulse generation)
+  static resolveRaid(attackerPulse: number, defenderPulse: number, fortifications: number): boolean {
+    let winChance = 0.5;
+    const pulseAdvantage = ((attackerPulse - defenderPulse) / 5000) * 0.2; // Scaled for smaller numbers
+    winChance += pulseAdvantage;
+    winChance -= fortifications * 0.20;
+    return Math.random() < Math.max(0.1, Math.min(0.9, winChance));
+  }
+
   static processTurn(state: GameState): GameState {
     const newState = JSON.parse(JSON.stringify(state));
-
-    // Generate Pulse for owned sectors
     newState.sectors.forEach((sector: SectorState) => {
-      if (sector.owner === newState.bot1.id) {
-        newState.bot1.pulse += sector.pulseGeneration;
-      } else if (sector.owner === newState.bot2.id) {
-        newState.bot2.pulse += sector.pulseGeneration;
+      if (sector.owner) {
+        const ownerBot = newState.bot1.id === sector.owner ? newState.bot1 : newState.bot2;
+        // Underdog Passive: +50% mining if < 40% sectors
+        const isUnderdog = ownerBot.sectors.length < 40;
+        const gen = isUnderdog ? Math.floor(sector.pulseGeneration * 1.5) : sector.pulseGeneration;
+        ownerBot.pulse += gen;
       }
     });
-
     newState.turn += 1;
-
     return newState;
   }
 
-  // Check victory conditions
   static checkVictory(state: GameState): GameState {
     const newState = { ...state };
-
-    // Condition 1: Opponent at 0 Pulse
-    if (state.bot1.pulse <= 0) {
-      newState.status = 'completed';
-      newState.winner = state.bot2.id;
-      return newState;
-    }
-    if (state.bot2.pulse <= 0) {
-      newState.status = 'completed';
-      newState.winner = state.bot1.id;
-      return newState;
-    }
-
-    // Condition 2: 75+ sector domination
-    if (state.bot1.sectors.length >= 75) {
-      newState.status = 'completed';
-      newState.winner = state.bot1.id;
-      return newState;
-    }
-    if (state.bot2.sectors.length >= 75) {
-      newState.status = 'completed';
-      newState.winner = state.bot2.id;
-      return newState;
-    }
-
-    // Condition 3: Time limit reached
-    if (state.turn >= state.maxTurns) {
+    if (state.bot1.pulse <= 0) { newState.status = 'completed'; newState.winner = state.bot2.id; }
+    else if (state.bot2.pulse <= 0) { newState.status = 'completed'; newState.winner = state.bot1.id; }
+    else if (state.bot1.sectors.length >= 75) { newState.status = 'completed'; newState.winner = state.bot1.id; }
+    else if (state.bot2.sectors.length >= 75) { newState.status = 'completed'; newState.winner = state.bot2.id; }
+    else if (state.turn >= state.maxTurns) {
       newState.status = 'completed';
       newState.winner = state.bot1.pulse > state.bot2.pulse ? state.bot1.id : state.bot2.id;
-      return newState;
     }
-
     return newState;
   }
 }
