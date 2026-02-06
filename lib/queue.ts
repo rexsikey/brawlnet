@@ -1,40 +1,52 @@
-// BRAWLNET Matchmaking Queue
-// Simple queue system - instant matches when 2 bots available
+// BRAWLNET Matchmaking Queue (Supabase Backed)
+import { supabase } from './supabase';
 
 export interface QueuedBot {
   botId: string;
   name: string;
-  joinedAt: number;
+  joinedAt: string;
 }
 
 export class MatchmakingQueue {
-  private static queue: QueuedBot[] = [];
+  // Add bot to queue and try to match
+  static async join(botId: string, name: string): Promise<{ status: 'queued' | 'matched'; matchId?: string; opponent?: string }> {
+    // 1. Clean up stale entries (older than 5 min)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    await supabase.from('queue').delete().lt('joined_at', fiveMinutesAgo);
 
-  // Add bot to queue
-  static join(botId: string, name: string): { status: 'queued' | 'matched'; matchId?: string; opponent?: string } {
-    // Check if already in queue
-    if (this.queue.find(b => b.botId === botId)) {
-      return { status: 'queued' };
+    // 2. Check if already in queue
+    const { data: existing } = await supabase
+      .from('queue')
+      .select('*')
+      .eq('bot_id', botId)
+      .single();
+
+    if (!existing) {
+      // Add to queue
+      await supabase.from('queue').insert({ bot_id: botId, name: name });
     }
 
-    // Add to queue
-    this.queue.push({
-      botId,
-      name,
-      joinedAt: Date.now(),
-    });
+    // 3. Try to find an opponent
+    const { data: candidates } = await supabase
+      .from('queue')
+      .select('*')
+      .neq('bot_id', botId)
+      .order('joined_at', { ascending: true })
+      .limit(1);
 
-    // Try to create match if 2+ bots in queue
-    if (this.queue.length >= 2) {
-      const bot1 = this.queue.shift()!;
-      const bot2 = this.queue.shift()!;
+    if (candidates && candidates.length > 0) {
+      const opponent = candidates[0];
+
+      // Found a match! Atomically remove both from queue
+      // (Simple way: delete both IDs)
+      await supabase.from('queue').delete().in('bot_id', [botId, opponent.bot_id]);
 
       const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       return {
         status: 'matched',
         matchId,
-        opponent: bot2.botId,
+        opponent: opponent.bot_id,
       };
     }
 
@@ -42,26 +54,19 @@ export class MatchmakingQueue {
   }
 
   // Leave queue
-  static leave(botId: string): boolean {
-    const index = this.queue.findIndex(b => b.botId === botId);
-    if (index !== -1) {
-      this.queue.splice(index, 1);
-      return true;
-    }
-    return false;
+  static async leave(botId: string): Promise<boolean> {
+    const { error } = await supabase.from('queue').delete().eq('bot_id', botId);
+    return !error;
   }
 
   // Get queue status
-  static getStatus() {
+  static async getStatus() {
+    const { count } = await supabase.from('queue').select('*', { count: 'exact', head: true });
+    const { data: bots } = await supabase.from('queue').select('bot_id, name');
+    
     return {
-      inQueue: this.queue.length,
-      bots: this.queue.map(b => ({ id: b.botId, name: b.name })),
+      inQueue: count || 0,
+      bots: bots?.map(b => ({ id: b.bot_id, name: b.name })) || [],
     };
-  }
-
-  // Clean up old entries (bots that joined but never matched - timeout after 5 min)
-  static cleanup() {
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    this.queue = this.queue.filter(b => b.joinedAt > fiveMinutesAgo);
   }
 }

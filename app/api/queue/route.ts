@@ -32,14 +32,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Join queue (Keep queue in memory for now, it's faster for matchmaking)
-    const result = MatchmakingQueue.join(botId, name);
+    // Join queue (Now persistent in Supabase)
+    const result = await MatchmakingQueue.join(botId, name);
 
     if (result.status === 'queued') {
+      const status = await MatchmakingQueue.getStatus();
       return NextResponse.json({
         status: 'queued',
         message: 'Waiting for opponent...',
-        queuePosition: MatchmakingQueue.getStatus().inQueue,
+        queuePosition: status.inQueue,
       });
     }
 
@@ -78,5 +79,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json(MatchmakingQueue.getStatus());
+  const status = await MatchmakingQueue.getStatus();
+  return NextResponse.json(status);
 }
