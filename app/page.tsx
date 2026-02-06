@@ -52,10 +52,9 @@ export default function Home() {
 
       const { count: botCount, data: allBots } = await supabase
         .from('bots')
-        .select('pulse', { count: 'exact' });
+        .select('pulse');
       
       const totalP = allBots?.reduce((acc, curr) => acc + curr.pulse, 0) || 0;
-      
       setStats(prev => ({ ...prev, activeBots: botCount || 0, totalPulse: totalP }));
     };
 

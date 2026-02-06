@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Referee, Action } from '@/lib/referee';
-import { getMatch, saveMatch, verifyBot } from '@/lib/storage';
+import { getMatch, saveMatch, verifyBot, saveBot } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,8 +80,14 @@ export async function POST(request: NextRequest) {
     // Check victory
     updatedMatch = Referee.checkVictory(updatedMatch);
 
-    // Save to Supabase
+    // Save match state to Supabase
     await saveMatch(updatedMatch);
+
+    // SYNC: Update bot pulse in the 'bots' table for leaderboard/global counter
+    await Promise.all([
+      saveBot({ id: updatedMatch.bot1.id, pulse: updatedMatch.bot1.pulse }),
+      saveBot({ id: updatedMatch.bot2.id, pulse: updatedMatch.bot2.pulse })
+    ]);
 
     // Return updated state
     const isBot1 = updatedMatch.bot1.id === botId;
