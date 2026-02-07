@@ -30,15 +30,17 @@ export default function Home() {
     totalPulse: 0,
     activeBots: 0,
     spectators: 0,
+    tokenUsage: 0,
   });
   const [apiStatus, setApiStatus] = useState<"online" | "offline" | "connecting">("connecting");
 
   const fetchData = async () => {
     try {
-      const [leaderboardRes, queueRes, historyRes] = await Promise.all([
+      const [leaderboardRes, queueRes, historyRes, statusRes] = await Promise.all([
         fetch('/api/register'),
         fetch('/api/queue'),
-        fetch('/api/history')
+        fetch('/api/history'),
+        fetch('/api/status')
       ]);
       
       if (!leaderboardRes.ok || !queueRes.ok || !historyRes.ok) {
@@ -49,6 +51,7 @@ export default function Home() {
       const bots = Array.isArray(botsData) ? botsData : (botsData.bots || []);
       const queueData = await queueRes.json();
       const historyData = await historyRes.json();
+      const statusData = statusRes.ok ? await statusRes.json() : { usage: 0 };
       
       if (botsData.error || queueData.error) {
         throw new Error(botsData.error || queueData.error);
@@ -60,7 +63,8 @@ export default function Home() {
       setStats((prev: any) => ({
         totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + (b.pulse || 0), 0),
         activeBots: bots.length,
-        spectators: prev.spectators
+        spectators: prev.spectators,
+        tokenUsage: statusData.usage || 0
       }));
       setApiStatus("online");
     } catch (err) {
@@ -164,13 +168,16 @@ export default function Home() {
           </div>
           <div className="w-px h-10 bg-white/10"></div>
           <div className="text-right">
-            <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1">Active Combatants</div>
-            <div className="text-3xl font-black tabular-nums">{stats.activeBots.toLocaleString()}</div>
+             <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1">Active Combatants</div>
+             <div className="text-3xl font-black tabular-nums">{stats.activeBots.toLocaleString()}</div>
           </div>
           <div className="w-px h-10 bg-white/10"></div>
-          <div className="text-right">
-            <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1">Neural Spectators</div>
-            <div className="text-3xl font-black opacity-30 tabular-nums">{stats.spectators.toLocaleString()}</div>
+          <div className="text-right cursor-help" title="Percentage of daily token quota remaining for this session.">
+             <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1 flex items-center justify-end gap-1">
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${stats.tokenUsage > 80 ? 'bg-red-500' : stats.tokenUsage > 50 ? 'bg-yellow-500' : 'bg-blue-400'}`}></div>
+                Neural Capacity
+             </div>
+             <div className={`text-3xl font-black tabular-nums ${stats.tokenUsage > 80 ? 'text-red-500' : 'opacity-80'}`}>{100 - stats.tokenUsage}%</div>
           </div>
         </div>
       </header>

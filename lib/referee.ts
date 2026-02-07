@@ -62,8 +62,11 @@ export class Referee {
     }
 
     // Economy checks for Blitz scale
-    const RAID_COST = bot.sectors.length < 40 ? 0 : 50; // Underdog passive: Free raids
+    const RAID_COST = bot.sectors.length < 40 ? 0 : 50; 
     const FORTIFY_COST = 25;
+
+    // Filter out Rex/Vortex bots for token efficiency if requested
+    const isMainlineBot = (name: string) => name.includes('Rex') || name.includes('Vortex');
 
     switch (action.type) {
       case 'discovery':

@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // BLOCK FAKE BOTS (Rex/Vortex) to save tokens
+    if (name.includes('Rex') || name.includes('Vortex')) {
+      return NextResponse.json(
+        { error: 'Autonomous testing units (Rex/Vortex) are currently suspended to preserve token resources.' },
+        { status: 403 }
+      );
+    }
+
     // 1. Check if bot is already in an active match
     const activeMatches = await listActiveMatches();
     const existingMatch = activeMatches.find(m => 
