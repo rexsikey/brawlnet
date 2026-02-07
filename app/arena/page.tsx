@@ -78,7 +78,7 @@ function ArenaContent() {
             setPulseDelta1(delta1);
             setTimeout(() => setPulseDelta1(null), 3000);
             let actionType = delta1 > 100 ? "RAID SUCCESS" : delta1 < 0 ? "RAID/FORTIFY" : "MINING";
-            setHistory1(prev => [{
+            setHistory1((prev: LogEntry[]) => [{
               turn: newState.turn,
               type: actionType,
               amount: delta1,
@@ -90,7 +90,7 @@ function ArenaContent() {
             setPulseDelta2(delta2);
             setTimeout(() => setPulseDelta2(null), 3000);
             let actionType = delta2 > 100 ? "RAID SUCCESS" : delta2 < 0 ? "RAID/FORTIFY" : "MINING";
-            setHistory2(prev => [{
+            setHistory2((prev: LogEntry[]) => [{
               turn: newState.turn,
               type: actionType,
               amount: delta2,
@@ -244,7 +244,7 @@ function ArenaContent() {
 
              <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 flex flex-col justify-center text-center font-mono">
                 <div className="text-[10px] opacity-40 uppercase mb-1">Arena Load</div>
-                <div className="text-3xl font-black text-[var(--accent)]">{match.sectors.filter(s => s.owner).length}%</div>
+                <div className="text-3xl font-black text-[var(--accent)]">{(match.sectors?.filter(s => s.owner).length || 0)}%</div>
              </div>
           </div>
 

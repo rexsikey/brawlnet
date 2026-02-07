@@ -98,5 +98,11 @@ export async function listCompletedMatches(limit = 20) {
     console.error('ListCompletedMatches Error:', error);
     return [];
   }
-  return data;
+  
+  // Flatten nested join data for frontend compatibility
+  return (data || []).map(m => ({
+    ...m,
+    bot1: Array.isArray(m.bot1) ? m.bot1[0] : m.bot1,
+    bot2: Array.isArray(m.bot2) ? m.bot2[0] : m.bot2
+  }));
 }

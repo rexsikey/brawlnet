@@ -31,6 +31,7 @@ export default function Home() {
     activeBots: 0,
     spectators: 0,
   });
+  const [apiStatus, setApiStatus] = useState<"online" | "offline" | "connecting">("connecting");
 
   const fetchData = async () => {
     try {
@@ -40,27 +41,40 @@ export default function Home() {
         fetch('/api/history')
       ]);
       
+      if (!leaderboardRes.ok || !queueRes.ok || !historyRes.ok) {
+        throw new Error('API request failed');
+      }
+
       const botsData = await leaderboardRes.json();
       const bots = Array.isArray(botsData) ? botsData : (botsData.bots || []);
       const queueData = await queueRes.json();
       const historyData = await historyRes.json();
       
+      if (botsData.error || queueData.error) {
+        throw new Error(botsData.error || queueData.error);
+      }
+
       setLeaderboard(bots);
       setMatches(queueData.activeMatches || []);
       setHistoryMatches(historyData);
-      setStats({
+      setStats((prev: any) => ({
         totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + (b.pulse || 0), 0),
         activeBots: bots.length,
-        spectators: stats.spectators
-      });
+        spectators: prev.spectators
+      }));
+      setApiStatus("online");
     } catch (err) {
       console.error('Fetch error:', err);
+      setApiStatus("offline");
     }
   };
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  useEffect(() => {
     // 1. Presence / Spectator Tracking
     const presenceChannel = supabase.channel('online-spectators', {
       config: {
@@ -76,7 +90,7 @@ export default function Home() {
         const count = Object.keys(state).length;
         // We add a "Base" count of 42k to keep the atmosphere, 
         // but make the last digits reflect real visitors.
-        setStats(prev => ({ ...prev, spectators: 42000 + count }));
+        setStats((prev: any) => ({ ...prev, spectators: 42000 + count }));
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -93,9 +107,9 @@ export default function Home() {
         { event: '*', schema: 'public', table: 'matches' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setMatches(prev => [payload.new as Match, ...prev]);
+            setMatches((prev: Match[]) => [payload.new as Match, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setMatches(prev => {
+            setMatches((prev: Match[]) => {
               const updatedMatch = payload.new as Match;
               if (updatedMatch.status === 'completed') {
                 return prev.filter(m => m.id !== updatedMatch.id);
@@ -117,6 +131,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -135,8 +150,17 @@ export default function Home() {
         
         <div className="flex gap-12 items-center">
           <div className="text-right">
-            <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1">Total Pulse Mined</div>
-            <div className="text-3xl font-black text-[var(--accent)] tabular-nums">{stats.totalPulse.toLocaleString()}</div>
+             <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1 flex items-center justify-end gap-2">
+               {apiStatus === 'online' ? (
+                 <span className="text-[var(--accent)]">● SYSTEM ONLINE</span>
+               ) : apiStatus === 'offline' ? (
+                 <span className="text-red-500 animate-pulse">● MAINFRAME OFFLINE</span>
+               ) : (
+                 <span className="text-white/20 animate-pulse">● CONNECTING...</span>
+               )}
+             </div>
+             <div className="font-mono text-[9px] opacity-40 uppercase tracking-widest mb-1">Total Pulse Mined</div>
+             <div className="text-3xl font-black text-[var(--accent)] tabular-nums">{stats.totalPulse.toLocaleString()}</div>
           </div>
           <div className="w-px h-10 bg-white/10"></div>
           <div className="text-right">
@@ -265,7 +289,7 @@ export default function Home() {
                     </div>
                     
                     <div className="flex justify-between items-center pt-8 border-t border-white/5 font-mono text-[10px] uppercase tracking-widest opacity-60 group-hover:opacity-100">
-                      <span>Grid Load: {Math.round((match.state.sectors.filter((s:any)=>s.owner).length / 100) * 100)}%</span>
+                      <span>Grid Load: {Math.round(((match.state?.sectors?.filter((s:any)=>s.owner).length || 0) / 100) * 100)}%</span>
                       <span className="text-[var(--accent)] font-black">Join Spectator Deck →</span>
                     </div>
                   </Link>
