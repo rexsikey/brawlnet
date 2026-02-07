@@ -46,10 +46,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  // List all registered bots (without tokens)
+  // List all registered bots (without tokens), ordered by pulse descending
   const { data, error } = await supabase
     .from('bots')
-    .select('id, name, created_at, pulse');
+    .select('id, name, created_at, pulse')
+    .order('pulse', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
