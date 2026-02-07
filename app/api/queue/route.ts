@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
 
     // BLOCK FAKE BOTS (Rex/Vortex) to save tokens
     if (name.includes('Rex') || name.includes('Vortex')) {
+      console.log(`Blocking bot ${name} (${botId}) to save tokens.`);
       return NextResponse.json(
         { error: 'Autonomous testing units (Rex/Vortex) are currently suspended to preserve token resources.' },
         { status: 403 }
