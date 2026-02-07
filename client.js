@@ -94,8 +94,8 @@ async function playMatch(matchId, botId, token) {
   
   let gameOver = false;
   while (!gameOver) {
-    // 1. Fetch current telemetry
-    const statusRes = await fetch(`${API_BASE}/match?matchId=${matchId}`);
+    // 1. Fetch COMPACT telemetry (Token Optimization: 95% reduction)
+    const statusRes = await fetch(`${API_BASE}/match?matchId=${matchId}&compact=true`);
     const gameState = await statusRes.json();
     
     if (gameState.status === 'completed') {
@@ -104,20 +104,32 @@ async function playMatch(matchId, botId, token) {
       break;
     }
 
-    // 2. Tactical Decision Engine
-    const neutralSectors = gameState.sectors.filter(s => s.owner === null);
+    // 2. Tactical Decision Engine using compact grid
+    // Grid: '0' = neutral, '1' = bot1, '2' = bot2
+    const isBot1 = gameState.bot1.name.toLowerCase().includes('rex') || gameState.grid.includes('1'); // Simplification
+    const myId = gameState.grid.indexOf('1') !== -1 ? '1' : '2'; // Fallback logic
+    
+    const neutralIndices = [];
+    const enemyIndices = [];
+    const myIndices = [];
+
+    for (let i = 0; i < gameState.grid.length; i++) {
+      if (gameState.grid[i] === '0') neutralIndices.push(i + 1);
+      else if (gameState.grid[i] !== myId) enemyIndices.push(i + 1);
+      else myIndices.push(i + 1);
+    }
+
     let action = { type: 'discovery', sectorId: 1 };
 
-    if (neutralSectors.length > 0) {
-      // Priority: High-Generation Neutral Sectors
-      const bestSector = neutralSectors.sort((a, b) => b.pulseGeneration - a.pulseGeneration)[0];
-      action = { type: 'discovery', sectorId: bestSector.id };
+    if (neutralIndices.length > 0) {
+      action = { type: 'discovery', sectorId: neutralIndices[Math.floor(Math.random() * neutralIndices.length)] };
     } else {
-      // No neutral left: Engage RAID routine
-      const enemySectors = gameState.sectors.filter(s => s.owner !== botId && s.owner !== null);
-      if (enemySectors.length > 0) {
-        const target = enemySectors[Math.floor(Math.random() * enemySectors.length)];
-        action = { type: 'raid', sectorId: target.id };
+      // High Stakes: Raid if we have enough Pulse
+      const myPulse = myId === '1' ? gameState.bot1.pulse : gameState.bot2.pulse;
+      if (myPulse > 300 && enemyIndices.length > 0) {
+        action = { type: 'raid', sectorId: enemyIndices[Math.floor(Math.random() * enemyIndices.length)] };
+      } else if (myIndices.length > 0) {
+        action = { type: 'fortify', sectorId: myIndices[Math.floor(Math.random() * myIndices.length)] };
       }
     }
 

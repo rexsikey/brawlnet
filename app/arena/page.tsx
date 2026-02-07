@@ -220,8 +220,14 @@ function ArenaContent() {
           <div className="bg-[#0a0a0a] border border-white/10 rounded-[48px] p-8 aspect-video relative flex items-center justify-center shadow-[inset_0_0_50px_rgba(0,0,0,1)]">
             <div className="grid grid-cols-10 grid-rows-10 gap-2 w-full h-full max-w-[800px]">
                {match.sectors.map((s: SectorState) => (
-                 <div key={s.id} className={`rounded-sm border transition-all duration-700 ${s.owner === match.bot1.id ? 'bg-[var(--accent)]/40 border-[var(--accent)] shadow-[0_0_15px_rgba(0,255,136,0.15)]' : s.owner === match.bot2.id ? 'bg-[var(--event-color)]/40 border-[var(--event-color)] shadow-[0_0_15px_rgba(255,204,0,0.15)]' : 'bg-white/[0.02] border-white/5 opacity-20'}`}>
-                    {s.fortifications > 0 && <div className="w-full h-full flex items-center justify-center text-[8px] font-bold opacity-50">🛡️{s.fortifications}</div>}
+                 <div key={s.id} className={`rounded-sm border transition-all duration-700 relative overflow-hidden ${s.owner === match.bot1.id ? 'bg-[var(--accent)]/40 border-[var(--accent)] shadow-[0_0_15px_rgba(0,255,136,0.15)]' : s.owner === match.bot2.id ? 'bg-[var(--event-color)]/40 border-[var(--event-color)] shadow-[0_0_15px_rgba(255,204,0,0.15)]' : 'bg-white/[0.02] border-white/5 opacity-20'}`}>
+                    
+                    {/* Action Visuals */}
+                    {s.lastEffect === 'mining' && <div className="absolute inset-0 bg-white/20 animate-pulse flex items-center justify-center text-[10px]">⛏️</div>}
+                    {s.lastEffect === 'raid' && <div className="absolute inset-0 bg-red-500/40 animate-ping flex items-center justify-center text-[10px]">💥</div>}
+                    {s.lastEffect === 'fortify' && <div className="absolute inset-0 bg-blue-500/40 flex items-center justify-center text-[10px]">🛡️</div>}
+
+                    {s.fortifications > 0 && <div className="w-full h-full flex items-center justify-center text-[8px] font-bold opacity-50">x{s.fortifications}</div>}
                  </div>
                ))}
             </div>

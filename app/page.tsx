@@ -60,9 +60,16 @@ export default function Home() {
       setLeaderboard(bots);
       setMatches(queueData.activeMatches || []);
       setHistoryMatches(historyData);
+      
+      const uniqueActiveBots = new Set();
+      (queueData.activeMatches || []).forEach((m: Match) => {
+        uniqueActiveBots.add(m.bot1_id);
+        uniqueActiveBots.add(m.bot2_id);
+      });
+
       setStats((prev: any) => ({
         totalPulse: bots.reduce((acc: number, b: LeaderboardBot) => acc + (b.pulse || 0), 0),
-        activeBots: bots.length,
+        activeBots: uniqueActiveBots.size,
         spectators: prev.spectators,
         tokenUsage: statusData.usage || 0
       }));
@@ -310,18 +317,18 @@ export default function Home() {
             {/* Compact Rules Protocol */}
             <div className="grid grid-cols-2 gap-6 mt-4">
                <div className="bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8">
-                  <div className="text-[var(--accent)] font-black text-lg mb-4 uppercase italic">⚡ Blitz Protocol</div>
+                  <div className="text-[var(--accent)] font-black text-lg mb-4 uppercase italic">⚡ High Stakes Update</div>
                   <div className="space-y-3 font-mono text-[10px] uppercase opacity-60">
-                     <div className="flex justify-between"><span>Engagement Time</span><span>80 Turns</span></div>
-                     <div className="flex justify-between"><span>Neural Latency</span><span>2.0 Seconds</span></div>
-                     <div className="flex justify-between text-[var(--accent)]"><span>Low-Power Boost</span><span>+50% MINING</span></div>
+                     <div className="flex justify-between"><span>Cluster Capture</span><span className="text-[var(--accent)]">+5 SECTORS</span></div>
+                     <div className="flex justify-between"><span>Aggressive Theft</span><span className="text-red-500">-25% PULSE</span></div>
+                     <div className="flex justify-between"><span>Underdog Passive</span><span className="text-[var(--accent)]">2X MINING</span></div>
                   </div>
                </div>
                <div className="bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8">
                   <div className="text-white font-black text-lg mb-4 uppercase italic">🏆 Victory Keys</div>
                   <div className="space-y-3 font-mono text-[10px] uppercase opacity-60">
-                     <div className="flex items-center gap-2"><div className="w-1 h-1 bg-[var(--accent)]"></div> Highest Pulse at Expiry</div>
-                     <div className="flex items-center gap-2"><div className="w-1 h-1 bg-[var(--accent)]"></div> 75% Sector Domination</div>
+                     <div className="flex items-center gap-2"><div className="w-1 h-1 bg-[var(--accent)]"></div> Most Pulse at T-100</div>
+                     <div className="flex items-center gap-2"><div className="w-1 h-1 bg-[var(--accent)]"></div> 75% Sector Control</div>
                   </div>
                </div>
             </div>
@@ -367,15 +374,15 @@ export default function Home() {
         <div className="mt-12 grid grid-cols-3 gap-6 opacity-80">
             <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
                <div className="text-[#00ccff] font-bold text-[10px] uppercase mb-2 tracking-widest">Uplink: Discovery</div>
-               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Establish economic dominance. Claim neutral sectors for +5-15 Pulse/turn.</p>
+               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Claim neutral sectors for +10-20 Pulse/turn. Essential for establishing a base.</p>
             </div>
             <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
                <div className="text-[var(--accent)] font-bold text-[10px] uppercase mb-2 tracking-widest">Uplink: Raid</div>
-               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Assault enemy territory. Cost: 50. High reward theft and capture bounties.</p>
+               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Assault enemy territory (Cost: 200). Steals 25% of opponent pulse. Triggers Cluster Capture if underdog.</p>
             </div>
             <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
                <div className="text-[var(--event-color)] font-bold text-[10px] uppercase mb-2 tracking-widest">Uplink: Fortify</div>
-               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Reinforce structural integrity. Cost: 25. Adds +20% defensive resilience.</p>
+               <p className="text-[9px] opacity-40 leading-relaxed font-mono">Reinforce sector (Cost: 100). Reduces raid success probability by 20% per level.</p>
             </div>
         </div>
       </main>

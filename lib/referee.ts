@@ -25,6 +25,7 @@ export interface SectorState {
   owner: string | null;
   fortifications: number; // 0-3
   pulseGeneration: number; // 5-15 per turn (Scaled down)
+  lastEffect?: 'mining' | 'raid' | 'fortify' | 'none';
 }
 
 export interface Action {
@@ -38,16 +39,17 @@ export class Referee {
       id: i + 1,
       owner: null,
       fortifications: 0,
-      pulseGeneration: Math.floor(Math.random() * 11) + 5, // 5-15
+      pulseGeneration: Math.floor(Math.random() * 11) + 10, // Increased to 10-20 for faster pace
+      lastEffect: 'none'
     }));
 
     return {
       matchId: `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      bot1: { id: bot1Id, name: bot1Name, pulse: 500, sectors: [] }, // Starting pulse 500
-      bot2: { id: bot2Id, name: bot2Name, pulse: 500, sectors: [] },
+      bot1: { id: bot1Id, name: bot1Name, pulse: 1000, sectors: [] }, // Starting pulse 1000
+      bot2: { id: bot2Id, name: bot2Name, pulse: 1000, sectors: [] },
       sectors,
       turn: 1,
-      maxTurns: 80, // Shorter games
+      maxTurns: 100, // 100 turns max
       status: 'active',
       startTime: Date.now(),
     };
@@ -61,12 +63,9 @@ export class Referee {
       return { valid: false, error: 'Invalid sector ID' };
     }
 
-    // Economy checks for Blitz scale
-    const RAID_COST = bot.sectors.length < 40 ? 0 : 50; 
-    const FORTIFY_COST = 25;
-
-    // Filter out Rex/Vortex bots for token efficiency if requested
-    const isMainlineBot = (name: string) => name.includes('Rex') || name.includes('Vortex');
+    // High Stakes Economy
+    const RAID_COST = 200; 
+    const FORTIFY_COST = 100;
 
     switch (action.type) {
       case 'discovery':
@@ -99,30 +98,35 @@ export class Referee {
     const opponent = newState.bot1.id === botId ? newState.bot2 : newState.bot1;
     const sector = newState.sectors.find((s: SectorState) => s.id === action.sectorId)!;
 
-    const RAID_COST = bot.sectors.length < 40 ? 0 : 50;
-    const FORTIFY_COST = 25;
+    // Reset effects
+    newState.sectors.forEach((s: any) => s.lastEffect = 'none');
+
+    const RAID_COST = 200;
+    const FORTIFY_COST = 100;
 
     switch (action.type) {
       case 'discovery':
         sector.owner = botId;
+        sector.lastEffect = 'mining';
         bot.sectors.push(sector.id);
         break;
 
       case 'raid':
         bot.pulse -= RAID_COST;
+        sector.lastEffect = 'raid';
         const success = this.resolveRaid(bot.pulse, opponent.pulse, sector.fortifications);
         
         if (success) {
-          // Comeback Mechanic: Last Stand
+          // Comeback Mechanic: High Stakes Theft
           const pulseDiff = opponent.pulse - bot.pulse;
-          const isUnderdog = pulseDiff > 1000 && newState.turn > 40;
+          const isUnderdog = pulseDiff > 2000 && newState.turn > 30;
           
-          const theftMultiplier = isUnderdog ? 0.30 : 0.15; // 30% theft if losing badly
+          const theftMultiplier = isUnderdog ? 0.50 : 0.25; // Massive theft if underdog
           const stolenPulse = Math.floor(opponent.pulse * theftMultiplier);
-          const bounty = isUnderdog ? 300 : 100;
+          const bounty = isUnderdog ? 500 : 200;
 
           opponent.pulse -= stolenPulse;
-          bot.pulse += (stolenPulse + bounty + RAID_COST);
+          bot.pulse += (stolenPulse + bounty);
           
           // Transfer ownership
           opponent.sectors = opponent.sectors.filter((id: number) => id !== sector.id);
@@ -130,38 +134,42 @@ export class Referee {
           sector.fortifications = 0;
           bot.sectors.push(sector.id);
 
-          // Last Stand: Cluster Capture (3 random neighbors)
+          // Overload: Chain Reaction
           if (isUnderdog) {
-            this.captureNeighbors(newState, botId, sector.id);
+            this.captureNeighbors(newState, botId, sector.id, 5); // Capture 5 neighbors
           }
         } else {
-          bot.pulse -= 20; // Failed raid penalty
+          bot.pulse -= 50; // Failed raid penalty
         }
         break;
 
       case 'fortify':
         bot.pulse -= FORTIFY_COST;
         sector.fortifications += 1;
+        sector.lastEffect = 'fortify';
         break;
     }
 
     return newState;
   }
 
-  private static captureNeighbors(state: any, botId: string, sectorId: number) {
-    // Simple neighbor logic for 10x10 grid
-    const neighbors = [sectorId - 1, sectorId + 1, sectorId - 10, sectorId + 10];
+  private static captureNeighbors(state: any, botId: string, sectorId: number, count: number) {
+    const neighbors = [
+      sectorId - 1, sectorId + 1, sectorId - 10, sectorId + 10,
+      sectorId - 11, sectorId - 9, sectorId + 9, sectorId + 11
+    ].sort(() => Math.random() - 0.5);
+
     let captured = 0;
     for (const nId of neighbors) {
-      if (captured >= 3) break;
+      if (captured >= count) break;
       const n = state.sectors.find((s: any) => s.id === nId);
       if (n && n.owner !== botId) {
-        // If it was opponent's, remove it from them
         if (n.owner) {
           const opp = state.bot1.id === n.owner ? state.bot1 : state.bot2;
           opp.sectors = opp.sectors.filter((id: number) => id !== n.id);
         }
         n.owner = botId;
+        n.lastEffect = 'raid';
         const bot = state.bot1.id === botId ? state.bot1 : state.bot2;
         bot.sectors.push(n.id);
         captured++;
@@ -171,8 +179,10 @@ export class Referee {
 
   static resolveRaid(attackerPulse: number, defenderPulse: number, fortifications: number): boolean {
     let winChance = 0.5;
-    const pulseAdvantage = ((attackerPulse - defenderPulse) / 5000) * 0.2; // Scaled for smaller numbers
+    // Pulse advantage gives up to 30% bonus
+    const pulseAdvantage = ((attackerPulse - defenderPulse) / 10000) * 0.3;
     winChance += pulseAdvantage;
+    // Fortifications are heavy: -20% per level
     winChance -= fortifications * 0.20;
     return Math.random() < Math.max(0.1, Math.min(0.9, winChance));
   }
@@ -182,9 +192,9 @@ export class Referee {
     newState.sectors.forEach((sector: SectorState) => {
       if (sector.owner) {
         const ownerBot = newState.bot1.id === sector.owner ? newState.bot1 : newState.bot2;
-        // Underdog Passive: +50% mining if < 40% sectors
-        const isUnderdog = ownerBot.sectors.length < 40;
-        const gen = isUnderdog ? Math.floor(sector.pulseGeneration * 1.5) : sector.pulseGeneration;
+        // Underdog Passive: Mining speed up
+        const isUnderdog = ownerBot.sectors.length < 30;
+        const gen = isUnderdog ? Math.floor(sector.pulseGeneration * 2) : sector.pulseGeneration;
         ownerBot.pulse += gen;
       }
     });
